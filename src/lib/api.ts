@@ -1,12 +1,18 @@
 import { supabase } from '@/lib/supabase';
 import type { Upload, Lead } from '@/types';
 import { scoreLeads, type TrainingMetrics } from '@/lib/ml';
-import { mapRowsToLeadsWithHeaders, parseCSV, type ColumnMapping } from '@/lib/csvParser';
+import {
+  mapRowsToLeadsWithHeaders,
+  parseCSV,
+  validateLeadsForScoring,
+  type ColumnMapping,
+} from '@/lib/csvParser';
 
 export interface UploadResult {
   upload: Upload;
   metrics: TrainingMetrics;
   leadCount: number;
+  warnings: string[];
 }
 
 export async function processCSVUpload(
@@ -22,8 +28,26 @@ export async function processCSVUpload(
     throw new Error('No leads found in the CSV file.');
   }
 
-  const { scoredLeads, metrics } = scoreLeads(rawLeads);
+  // Runs before the upload row is created so unusable files cost no quota.
+  const validation = validateLeadsForScoring(rawLeads);
+  if (validation.error) {
+    throw new Error(validation.error);
+  }
+  const warnings = [...validation.warnings];
+
+  const { scoredLeads, metrics, warnings: modelWarnings } = scoreLeads(rawLeads);
+  warnings.push(...modelWarnings);
+
+  // Matches the model's target exactly, so the headline rate and the thing the
+  // model predicts can never drift apart again.
   const conversionRate = rawLeads.filter((l) => l.status === 'won').length / rawLeads.length;
+
+  // Catches any remaining degenerate fit, whatever its cause.
+  if (new Set(scoredLeads.map((l) => l.score_0_100)).size === 1) {
+    warnings.push(
+      `Every lead scored ${scoredLeads[0].score_0_100}, meaning the data holds no signal the model can separate. Check your column mapping.`
+    );
+  }
 
   const { data: upload, error: uploadError } = await supabase
     .from('uploads')
@@ -65,7 +89,9 @@ export async function processCSVUpload(
     const batch = leadRows.slice(i, i + BATCH_SIZE);
     const { error } = await supabase.from('leads').insert(batch);
     if (error) {
-      console.error('Batch insert error:', error);
+      // Otherwise the upload row survives as 'completed' with a row_count that
+      // getMonthlyLeadCount keeps charging against the plan limit.
+      await supabase.from('uploads').delete().eq('id', upload.id);
       throw new Error(`Failed to save leads: ${error.message}`);
     }
   }
@@ -74,6 +100,7 @@ export async function processCSVUpload(
     upload: upload as Upload,
     metrics,
     leadCount: rawLeads.length,
+    warnings,
   };
 }
 

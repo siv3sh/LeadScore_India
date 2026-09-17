@@ -24,7 +24,12 @@ export const OPTIONAL_COLUMNS = ['lead_id', 'last_contacted_at'] as const;
 
 export const ALL_COLUMNS = [...OPTIONAL_COLUMNS, ...REQUIRED_COLUMNS] as const;
 
-export const SAMPLE_SOURCES = ['fb', 'ig', 'google', 'referral', 'walkin', 'other'];
+// The only source values the model one-hot encodes. Anything else scores as all-zero.
+export const SOURCES = ['fb', 'ig', 'google', 'referral', 'walkin', 'other'];
+
+// Statuses that represent a settled outcome and can therefore be trained on.
+// Kept in sync with RESOLVED_STATUSES in ml.ts.
+export const RESOLVED_STATUSES = ['won', 'lost', 'no_response'];
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -49,6 +54,18 @@ function parseCSVLine(line: string): string[] {
   }
   result.push(current);
   return result.map((s) => s.trim());
+}
+
+// created_at and last_contacted_at land in timestamptz columns, so anything
+// unparseable has to become null here rather than reaching Postgres.
+function normalizeTimestamp(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // Flag columns encoded as 0/1 would otherwise parse as years.
+  if (/^\d{1,3}$/.test(trimmed)) return null;
+  const parsed = new Date(trimmed);
+  if (isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 export function parseCSV(text: string): { headers: string[]; rows: string[][] } {
@@ -83,7 +100,7 @@ export function guessColumnMapping(headers: string[]): ColumnMapping {
     phone: findCol(['phone', 'mobile', 'number', 'contact']) ?? headers[1],
     source: findCol(['source', 'channel', 'origin']) ?? 'source',
     created_at: findCol(['created', 'date', 'timestamp', 'lead_date']) ?? 'created_at',
-    last_contacted_at: findCol(['last_contact', 'last_touch', 'contacted']) ?? undefined,
+    last_contacted_at: findCol(['last_contact', 'last_touch', 'contacted_at', 'contacted_on', 'contact_date']) ?? undefined,
     order_value: findCol(['order_value', 'value', 'amount', 'revenue', 'aov']) ?? 'order_value',
     num_orders: findCol(['num_orders', 'orders', 'order_count', 'purchases']) ?? 'num_orders',
     status: findCol(['status', 'stage', 'outcome', 'result']) ?? 'status',
@@ -124,13 +141,51 @@ export function mapRowsToLeadsWithHeaders(
       name: getVal(idx.name) || 'Unknown',
       phone: getVal(idx.phone) || '',
       source: getVal(idx.source).toLowerCase().trim() || 'other',
-      created_at: getVal(idx.created_at) || new Date().toISOString(),
-      last_contacted_at: getVal(idx.last_contacted_at) || null,
+      created_at: normalizeTimestamp(getVal(idx.created_at)) ?? new Date().toISOString(),
+      last_contacted_at: normalizeTimestamp(getVal(idx.last_contacted_at)),
       order_value: parseNum(getVal(idx.order_value)),
       num_orders: parseInt(getVal(idx.num_orders)) || 0,
       status: getVal(idx.status).toLowerCase().trim() || 'unknown',
     };
   });
+}
+
+export interface LeadValidation {
+  error: string | null;
+  warnings: string[];
+}
+
+/**
+ * Catches mappings that produce a model with nothing to learn from. The label is
+ * derived solely from `status === 'won'`, so a file with no won rows trains on an
+ * all-zero target and scores every lead identically instead of failing.
+ */
+export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
+  const warnings: string[] = [];
+
+  if (!leads.some((l) => l.status === 'won')) {
+    return {
+      error:
+        "No leads have status 'won', so there is nothing for the model to learn from. " +
+        'Map your outcome column to "status" using won / lost / no_response values, then upload again.',
+      warnings,
+    };
+  }
+
+  if (!leads.some((l) => SOURCES.includes(l.source))) {
+    warnings.push(
+      `No lead source matched ${SOURCES.join(', ')}, so source is being ignored when scoring.`
+    );
+  }
+
+  if (!leads.some((l) => RESOLVED_STATUSES.includes(l.status) && l.status !== 'won')) {
+    warnings.push(
+      'Every lead with a settled outcome is marked won, so the model has no examples of a lead ' +
+        'that did not convert and cannot tell the two apart. Include lost / no_response leads too.'
+    );
+  }
+
+  return { error: null, warnings };
 }
 
 export function generateSampleCSV(): string {
