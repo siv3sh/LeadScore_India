@@ -1,0 +1,3 @@
+# Netlify and Render: routing is client-side, so every path must be served
+# index.html. Without this, loading or refreshing /admin returns a 404.
+/*    /index.html   200

@@ -13,6 +13,7 @@ function subscription(plan: PlanType, trialEndsAt: string | null): Subscription 
     current_period_end: null,
     trial_ends_at: trialEndsAt,
     razorpay_subscription_id: null,
+    plan_source: null,
     created_at: NOW,
     updated_at: NOW,
   };

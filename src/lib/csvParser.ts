@@ -230,9 +230,29 @@ export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
     };
   }
 
-  if (!leads.some((l) => SOURCES.includes(l.source))) {
+  const unrecognizedSources: string[] = [];
+  for (const lead of leads) {
+    if (!SOURCES.includes(lead.source)) {
+      unrecognizedSources.push(lead.source);
+    }
+  }
+
+  if (unrecognizedSources.length > 0) {
+    const percent = Math.round((unrecognizedSources.length / leads.length) * 100);
+    const examples: string[] = [];
+    const seen = new Set<string>();
+    for (const value of unrecognizedSources) {
+      const label = value.trim() === '' ? '(blank)' : value;
+      if (seen.has(label)) continue;
+      seen.add(label);
+      examples.push(label);
+      if (examples.length === 3) break;
+    }
+    const exampleText = examples.length > 0 ? ` Examples: ${examples.join(', ')}.` : '';
     warnings.push(
-      `No lead source matched ${SOURCES.join(', ')}, so source is being ignored when scoring.`
+      `${unrecognizedSources.length} of ${leads.length} leads (${percent}%) have a source ` +
+        `that is not ${SOURCES.join(', ')}, so those rows are scored without a source signal.` +
+        exampleText
     );
   }
 

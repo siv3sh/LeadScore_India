@@ -1,13 +1,14 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import type { Workspace, Subscription } from '@/types';
+import type { Workspace, Subscription, Profile } from '@/types';
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   workspace: Workspace | null;
   subscription: Subscription | null;
+  profile: Profile | null;
   loading: boolean;
   signUp: (email: string, password: string, workspaceName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
@@ -22,16 +23,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function loadWorkspaceData(userId: string) {
-    const { data: ws } = await supabase
-      .from('workspaces')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
+    // Independent reads, so one round trip instead of two. A missing or
+    // unreadable profile leaves `profile` null, which every caller treats as
+    // "not an admin" — the flag fails closed rather than unknown.
+    const [{ data: ws }, { data: prof }] = await Promise.all([
+      supabase.from('workspaces').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
+    ]);
 
     setWorkspace(ws as Workspace | null);
+    setProfile(prof as Profile | null);
 
     if (ws) {
       const { data: sub } = await supabase
@@ -65,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setWorkspace(null);
           setSubscription(null);
+          setProfile(null);
         }
         setLoading(false);
       })();
@@ -108,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setWorkspace(null);
     setSubscription(null);
+    setProfile(null);
   }
 
   async function refreshWorkspace() {
@@ -118,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, workspace, subscription, loading, signUp, signIn, signOut, refreshWorkspace }}
+      value={{ session, user, workspace, subscription, profile, loading, signUp, signIn, signOut, refreshWorkspace }}
     >
       {children}
     </AuthContext.Provider>

@@ -19,6 +19,7 @@ import {
   Phone,
   LogOut,
   CreditCard,
+  UserCircle,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
@@ -43,6 +44,7 @@ import {
   SOURCES,
   type ColumnMapping,
 } from '@/lib/csvParser';
+import { readUploadAsCsv } from '@/lib/spreadsheet';
 import {
   formatINR,
   formatSource,
@@ -54,6 +56,7 @@ import {
 import { formatTrialEnd, getTrialState } from '@/lib/trial';
 import LeadCharts from '@/components/LeadCharts';
 import PricingModal from '@/components/PricingModal';
+import ProfileModal from '@/components/ProfileModal';
 import { getPlan, type Priority } from '@/types';
 import type { Upload, Lead } from '@/types';
 
@@ -65,6 +68,7 @@ export default function Dashboard() {
   const [monthlyCount, setMonthlyCount] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -255,7 +259,15 @@ export default function Dashboard() {
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition"
               >
                 <UploadIcon className="w-3.5 h-3.5" />
-                Upload CSV
+                Upload leads
+              </button>
+              <button
+                onClick={() => setShowProfile(true)}
+                className="p-2 text-slate-400 hover:text-slate-700 transition"
+                title="Your profile"
+                aria-label="Your profile"
+              >
+                <UserCircle className="w-4 h-4" />
               </button>
               <button
                 onClick={signOut}
@@ -390,10 +402,12 @@ export default function Dashboard() {
               <Users className="w-6 h-6 text-slate-400" />
             </div>
             <h3 className="text-base font-semibold text-slate-800 mb-1">No leads yet</h3>
-            <p className="text-sm text-slate-500 mb-4">Upload a CSV file to start scoring your leads.</p>
+            <p className="text-sm text-slate-500 mb-4">
+              Upload a CSV or Excel file to start scoring your leads.
+            </p>
             <button onClick={() => setShowUploadModal(true)} className="btn-primary inline-flex items-center gap-2">
               <UploadIcon className="w-4 h-4" />
-              Upload Your First CSV
+              Upload Your First File
             </button>
           </div>
         ) : (
@@ -582,6 +596,9 @@ export default function Dashboard() {
       </div>
 
       {showPricing && <PricingModal onClose={() => setShowPricing(false)} />}
+      {showProfile && (
+        <ProfileModal monthlyCount={monthlyCount} onClose={() => setShowProfile(false)} />
+      )}
 
       {showUploadModal && (
         <UploadModal
@@ -642,32 +659,50 @@ function UploadModal({
   const [mapping, setMapping] = useState<ColumnMapping | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UploadResult | null>(null);
+  // Reading an Excel file fetches the parser and decodes the workbook, so it is
+  // slow enough to need feedback where reading a CSV was effectively instant.
+  const [readingFile, setReadingFile] = useState(false);
+  const [sheetNotice, setSheetNotice] = useState<string | null>(null);
 
-  function handleFile(file: File) {
+  async function handleFile(file: File) {
     setError(null);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      try {
-        const parsed = parseCSV(text);
-        // The downloaded template is headers-only, so this is the expected
-        // state when someone uploads it before filling it in.
-        if (parsed.rows.length === 0) {
-          setError('This file has no lead rows — add your leads below the header row, then upload again.');
-          return;
-        }
-        setHeaders(parsed.headers);
-        setRows(parsed.rows);
-        setMapping(guessColumnMapping(parsed.headers));
-        setCsvText(text);
-        setFileName(file.name);
-        setStep('mapping');
-      } catch {
-        setError('Could not parse this CSV file. Please check the format.');
+    setReadingFile(true);
+    try {
+      // Excel is converted to CSV text at this boundary, so every step after
+      // this one is identical for both formats.
+      const { csvText: text, sheetName, skippedSheets } = await readUploadAsCsv(file);
+      const parsed = parseCSV(text);
+      // The downloaded template is headers-only, so this is the expected
+      // state when someone uploads it before filling it in.
+      if (parsed.rows.length === 0) {
+        setError(
+          sheetName
+            ? `Sheet "${sheetName}" has column headings but no lead rows — add your leads underneath them, then upload again.`
+            : 'This file has no lead rows — add your leads below the header row, then upload again.'
+        );
+        return;
       }
-    };
-    reader.onerror = () => setError('Could not read that file. Please try again.');
-    reader.readAsText(file);
+      setHeaders(parsed.headers);
+      setRows(parsed.rows);
+      setMapping(guessColumnMapping(parsed.headers));
+      setCsvText(text);
+      setFileName(file.name);
+      setSheetNotice(
+        skippedSheets.length > 0 && sheetName
+          ? `Read sheet "${sheetName}". This workbook also has ${skippedSheets.join(', ')} — only one sheet is read at a time.`
+          : null
+      );
+      setStep('mapping');
+    } catch (err) {
+      // readUploadAsCsv explains what is wrong with the file; parseCSV does not.
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not read that file. Please check the format and try again.'
+      );
+    } finally {
+      setReadingFile(false);
+    }
   }
 
   function handleDownloadTemplate() {
@@ -731,28 +766,48 @@ function UploadModal({
           {step === 'upload' && (
             <div>
               <div
-                className="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:border-teal-500 transition cursor-pointer"
+                className={`border-2 border-dashed rounded-xl p-10 text-center transition ${
+                  readingFile
+                    ? 'border-slate-200 cursor-wait'
+                    : 'border-slate-300 hover:border-teal-500 cursor-pointer'
+                }`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
+                  if (readingFile) return;
                   const file = e.dataTransfer.files[0];
-                  if (file) handleFile(file);
+                  // A dropped file bypasses the accept filter, so the type is
+                  // validated inside handleFile rather than trusted here.
+                  if (file) void handleFile(file);
                 }}
-                onClick={() => document.getElementById('csv-input')?.click()}
+                onClick={() => {
+                  if (!readingFile) document.getElementById('csv-input')?.click();
+                }}
               >
-                <UploadIcon className="w-10 h-10 text-slate-400 mx-auto mb-3" />
-                <p className="text-sm font-medium text-slate-700">Drop your CSV here, or click to browse</p>
-                <p className="text-xs text-slate-400 mt-1">
-                  CSV files only, up to {planLimit.toLocaleString('en-IN')} leads
-                </p>
+                {readingFile ? (
+                  <>
+                    <Loader2 className="w-10 h-10 text-slate-400 mx-auto mb-3 animate-spin" />
+                    <p className="text-sm font-medium text-slate-700">Reading your file…</p>
+                  </>
+                ) : (
+                  <>
+                    <UploadIcon className="w-10 h-10 text-slate-400 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-slate-700">
+                      Drop your CSV or Excel file here, or click to browse
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      .csv, .xlsx or .xls — up to {planLimit.toLocaleString('en-IN')} leads
+                    </p>
+                  </>
+                )}
                 <input
                   id="csv-input"
                   type="file"
-                  accept=".csv"
+                  accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleFile(file);
+                    if (file) void handleFile(file);
                     // Chrome skips the change event when the same path is picked
                     // again, which would strand anyone who fills in the template
                     // and re-selects the same filename.
@@ -809,8 +864,14 @@ function UploadModal({
 
           {step === 'mapping' && mapping && (
             <div>
+              {sheetNotice && (
+                <div className="mb-4 flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{sheetNotice}</span>
+                </div>
+              )}
               <p className="text-sm text-slate-600 mb-4">
-                Map your CSV columns to LeadScore fields. We've auto-detected the mapping — adjust if needed.
+                Map your columns to LeadScore fields. We've auto-detected the mapping — adjust if needed.
               </p>
               <div className="space-y-3">
                 <MappingField label="Name" value={mapping.name} headers={headers} onChange={(v) => setMapping({ ...mapping, name: v })} required />

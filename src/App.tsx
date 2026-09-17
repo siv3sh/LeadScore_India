@@ -1,11 +1,13 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuth } from '@/lib/auth';
+import AdminPage from '@/pages/AdminPage';
 import AuthPage from '@/pages/AuthPage';
 import Dashboard from '@/pages/Dashboard';
 import { Loader2, TrendingUp } from 'lucide-react';
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -24,15 +26,26 @@ function AppContent() {
     return <AuthPage />;
   }
 
-  // Pricing lives in a modal inside the dashboard, so there is no separate view
-  // to route to any more.
-  return <Dashboard />;
+  // An admin account administers the system rather than using it, so it lands
+  // on the panel instead of the uploading-and-billing dashboard.
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={profile?.is_admin ? <Navigate to="/admin" replace /> : <Dashboard />}
+      />
+      <Route path="/admin" element={<AdminPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
     </AuthProvider>
   );
 }

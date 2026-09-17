@@ -13,7 +13,8 @@ import {
   type ColumnMapping,
   type RawLead,
 } from './csvParser';
-import { makeLead } from './testFixtures';
+import { engineerFeatures } from './ml';
+import { BASE_TIME, makeLead } from './testFixtures';
 
 const TEMPLATE_HEADERS = [
   'lead_id',
@@ -346,12 +347,67 @@ describe('validateLeadsForScoring', () => {
     expect(result.warnings.join(' ')).toContain('no examples of a lead that did not convert');
   });
 
-  it('warns when no source value is one the model encodes', () => {
+  it('does not warn when every source is one the model encodes', () => {
+    const result = validateLeadsForScoring([
+      makeLead({ status: 'won', source: 'fb' }),
+      makeLead({ status: 'lost', source: 'ig' }),
+      makeLead({ status: 'lost', source: 'google' }),
+      makeLead({ status: 'no_response', source: 'referral' }),
+      makeLead({ status: 'lost', source: 'walkin' }),
+      makeLead({ status: 'lost', source: 'other' }),
+    ]);
+    expect(result.error).toBeNull();
+    expect(result.warnings.join(' ')).not.toMatch(/source/i);
+  });
+
+  // Real CRM exports mix "fb" with "Facebook" / "Website Referral". Previously we
+  // only warned when EVERY source was unrecognised, so this common case was silent.
+  it('warns with the count of unrecognised sources even when some rows are valid', () => {
+    const leads = [
+      makeLead({ status: 'won', source: 'fb' }),
+      makeLead({ status: 'lost', source: 'facebook' }),
+      makeLead({ status: 'lost', source: 'referral' }),
+      makeLead({ status: 'lost', source: 'website referral' }),
+    ];
+    const result = validateLeadsForScoring(leads);
+    expect(result.error).toBeNull();
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('2 of 4 leads (50%)');
+    expect(result.warnings[0]).toContain('facebook');
+    expect(result.warnings[0]).toContain('website referral');
+  });
+
+  it('still warns when every source is unrecognised', () => {
     const result = validateLeadsForScoring([
       makeLead({ status: 'won', source: 'justdial' }),
       makeLead({ status: 'lost', source: 'justdial' }),
     ]);
-    expect(result.warnings.join(' ')).toContain('No lead source matched');
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('2 of 2 leads (100%)');
+    expect(result.warnings[0]).toContain('justdial');
+  });
+
+  it('counts unrecognised sources per row, not per distinct value', () => {
+    const result = validateLeadsForScoring([
+      makeLead({ status: 'won', source: 'fb' }),
+      makeLead({ status: 'lost', source: 'facebook' }),
+      makeLead({ status: 'lost', source: 'facebook' }),
+      makeLead({ status: 'lost', source: 'referral' }),
+    ]);
+    expect(result.warnings[0]).toContain('2 of 4 leads (50%)');
+    expect(result.warnings[0].match(/facebook/g)).toHaveLength(1);
+  });
+
+  it('one-hot encodes unrecognised sources as all zeros without changing valid rows', () => {
+    const fb = makeLead({ source: 'fb' });
+    const facebook = makeLead({ source: 'facebook' });
+    const referral = makeLead({ source: 'referral' });
+    const website = makeLead({ source: 'website referral' });
+
+    expect(engineerFeatures(fb, BASE_TIME).slice(6)).toEqual([1, 0, 0, 0, 0, 0]);
+    expect(engineerFeatures(referral, BASE_TIME).slice(6)).toEqual([0, 0, 0, 1, 0, 0]);
+    expect(engineerFeatures(facebook, BASE_TIME).slice(6)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(engineerFeatures(website, BASE_TIME).slice(6)).toEqual([0, 0, 0, 0, 0, 0]);
   });
 });
 

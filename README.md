@@ -9,7 +9,7 @@ Predictive lead scoring for D2C brands and local service businesses in India. Up
 - **Prioritized dashboard** — filter by priority (High/Medium/Low) and source, sort by score
 - **Suggested actions** — each lead gets a recommended next step ("Call today", "Send WhatsApp offer", etc.)
 - **CSV export** — download the scored, filtered view
-- **Subscription plans** — Starter (₹1,999/mo), Growth (₹4,999/mo), Pro (₹9,999/mo) via Razorpay
+- **Subscription plans** — Starter (₹1,999/mo), Growth (₹4,999/mo), Pro (₹6,999/mo) via Razorpay
 
 ## Tech Stack
 
@@ -86,7 +86,7 @@ You can download a sample CSV template from the upload modal.
 | Free Trial | ₹0 | 100/month |
 | Starter | ₹1,999/mo | 1,000/month |
 | Growth | ₹4,999/mo | 10,000/month |
-| Pro | ₹9,999/mo | 50,000/month |
+| Pro | ₹6,999/mo | 50,000/month |
 
 ## Deployment
 

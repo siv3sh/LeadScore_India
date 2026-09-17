@@ -17,7 +17,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const PLAN_AMOUNTS: Record<string, number> = {
   starter: 199900,
   growth: 499900,
-  pro: 999900,
+  pro: 699900,
 };
 
 function json(body: unknown, status: number): Response {

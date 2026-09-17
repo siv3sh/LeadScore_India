@@ -18,7 +18,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const PLAN_AMOUNTS: Record<string, number> = {
   starter: 199900,
   growth: 499900,
-  pro: 999900,
+  pro: 699900,
 };
 
 const PLAN_DURATION_DAYS = 30;
@@ -129,6 +129,9 @@ Deno.serve(async (req: Request) => {
       status: 'active',
       current_period_end: periodEnd.toISOString(),
       razorpay_subscription_id: payment_id,
+      // Marks the plan as paid for, so a manual admin grant stays
+      // distinguishable from one a payment activated.
+      plan_source: 'razorpay',
     };
 
     const { error: writeError } = existing

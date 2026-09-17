@@ -477,6 +477,6 @@ describe('unrecognised source', () => {
       validateLeadsForScoring([lead, makeLead({ source: 'justdial', status: 'lost' })]).warnings.join(
         ' '
       )
-    ).toContain('No lead source matched');
+    ).toContain('2 of 2 leads (100%)');
   });
 });
