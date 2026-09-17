@@ -2,12 +2,30 @@ import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
 const RAZORPAY_KEY_ID = Deno.env.get('RAZORPAY_KEY_ID') ?? '';
 const RAZORPAY_KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET') ?? '';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+// Amounts in paise. Must stay in sync with PLANS in src/types/index.ts and with
+// razorpay-verify, which re-checks the paid amount against the same table.
+const PLAN_AMOUNTS: Record<string, number> = {
+  starter: 199900,
+  growth: 499900,
+  pro: 999900,
+};
+
+function json(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -15,65 +33,83 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { plan_id, amount, workspace_id, workspace_name } = await req.json();
-
-    if (!plan_id || !amount || !workspace_id) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Authenticate before anything else, so unauthenticated callers learn
+    // nothing about how the project is configured.
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+    if (!token) {
+      return json({ error: 'Missing authorization header' }, 401);
     }
 
+    const anon = createClient(SUPABASE_URL, ANON_KEY);
+    const { data: userData, error: userError } = await anon.auth.getUser(token);
+    if (userError || !userData.user) {
+      return json({ error: 'Invalid or expired session' }, 401);
+    }
+
+    const { plan_id, workspace_id, workspace_name } = await req.json();
+    if (!plan_id || !workspace_id) {
+      return json({ error: 'Missing required fields' }, 400);
+    }
+
+    // Derived here, never taken from the request, so the client cannot order a
+    // ₹1 Pro plan.
+    const amount = PLAN_AMOUNTS[plan_id];
+    if (!amount) {
+      return json({ error: `Unknown or unpurchasable plan: ${plan_id}` }, 400);
+    }
+
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const { data: workspace } = await admin
+      .from('workspaces')
+      .select('id')
+      .eq('id', workspace_id)
+      .eq('user_id', userData.user.id)
+      .maybeSingle();
+    if (!workspace) {
+      return json({ error: 'Workspace not found for this account' }, 403);
+    }
+
+    // Operational concern, checked only after the caller has been authenticated
+    // and authorized for this workspace.
     if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
-      return new Response(
-        JSON.stringify({ error: 'Razorpay keys not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in edge function secrets.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      return json(
+        {
+          error:
+            'Razorpay keys not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in edge function secrets.',
+        },
+        500
       );
     }
 
     const auth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
-
     const orderRes = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
       body: JSON.stringify({
-        amount: amount,
+        amount,
         currency: 'INR',
         receipt: `ls_${workspace_id.slice(0, 8)}_${Date.now()}`,
-        notes: {
-          plan_id,
-          workspace_id,
-          workspace_name: workspace_name || '',
-        },
+        notes: { plan_id, workspace_id, workspace_name: workspace_name || '' },
       }),
     });
 
     if (!orderRes.ok) {
       const errText = await orderRes.text();
-      return new Response(
-        JSON.stringify({ error: `Razorpay order creation failed: ${errText}` }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return json({ error: `Razorpay order creation failed: ${errText}` }, 502);
     }
 
     const order = await orderRes.json();
 
-    return new Response(
-      JSON.stringify({
+    return json(
+      {
         order_id: order.id,
         key_id: RAZORPAY_KEY_ID,
         amount: order.amount,
         currency: order.currency,
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      },
+      200
     );
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json({ error: err instanceof Error ? err.message : 'Unexpected error' }, 500);
   }
 });

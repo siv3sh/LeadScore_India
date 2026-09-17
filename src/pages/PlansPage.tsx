@@ -12,6 +12,15 @@ export default function PlansPage({ onBack }: { onBack: () => void }) {
 
   const currentPlan = getPlan(subscription?.plan ?? 'free');
 
+  // The edge functions identify the caller from this token; the anon key is
+  // public and proves nothing about who is asking.
+  async function getAccessToken(): Promise<string> {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Your session has expired. Please sign in again.');
+    return token;
+  }
+
   useEffect(() => {
     const existing = document.querySelector('script[src*="checkout.razorpay"]');
     if (existing) {
@@ -40,11 +49,10 @@ export default function PlansPage({ onBack }: { onBack: () => void }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            Authorization: `Bearer ${await getAccessToken()}`,
           },
           body: JSON.stringify({
             plan_id: planId,
-            amount: plan.price * 100,
             workspace_id: workspace.id,
             workspace_name: workspace.name,
           }),
@@ -97,7 +105,7 @@ export default function PlansPage({ onBack }: { onBack: () => void }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            Authorization: `Bearer ${await getAccessToken()}`,
           },
           body: JSON.stringify({
             payment_id: paymentId,
@@ -108,7 +116,10 @@ export default function PlansPage({ onBack }: { onBack: () => void }) {
       );
 
       if (!response.ok) {
-        throw new Error('Payment verification failed');
+        // The function returns specific reasons (amount mismatch, wrong
+        // workspace, reused payment) that the user needs to see.
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Payment verification failed');
       }
 
       await refreshWorkspace();
