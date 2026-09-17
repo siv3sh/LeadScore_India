@@ -533,16 +533,3 @@ function scoreWithoutTraining(
     warnings,
   };
 }
-
-export function getPriorityColor(priority: string): string {
-  switch (priority) {
-    case 'high':
-      return 'text-emerald-700 bg-emerald-50 border-emerald-200';
-    case 'medium':
-      return 'text-amber-700 bg-amber-50 border-amber-200';
-    case 'low':
-      return 'text-slate-600 bg-slate-50 border-slate-200';
-    default:
-      return 'text-slate-600 bg-slate-50 border-slate-200';
-  }
-}

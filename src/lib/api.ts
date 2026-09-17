@@ -72,6 +72,7 @@ export async function processCSVUpload(
     lead_id: lead.lead_id,
     name: lead.name,
     phone: lead.phone,
+    city: lead.city || null,
     source: lead.source,
     created_at_lead: lead.created_at,
     last_contacted_at: lead.last_contacted_at,
@@ -143,6 +144,7 @@ export function exportLeadsToCSV(leads: Lead[]): string {
   const headers = [
     'name',
     'phone',
+    'city',
     'source',
     'order_value',
     'num_orders',
@@ -165,6 +167,7 @@ export function exportLeadsToCSV(leads: Lead[]): string {
     [
       escapeVal(l.name),
       escapeVal(l.phone),
+      escapeVal(l.city),
       escapeVal(l.source),
       escapeVal(l.order_value),
       escapeVal(l.num_orders),
@@ -189,19 +192,30 @@ export function downloadCSV(csv: string, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Deliberately mirrors enforce_monthly_lead_limit: it counts `leads` rows from
+ * date_trunc('month', now()), which is UTC. Building the boundary in local time
+ * would shift it by the browser's offset — 5.5 hours in IST — so the quota
+ * shown and the quota enforced would disagree around month end. Summing
+ * uploads.row_count instead of counting rows had the same problem: it counts
+ * what a file claimed rather than what was stored.
+ */
 export async function getMonthlyLeadCount(workspaceId: string): Promise<number> {
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const startOfMonthUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
-  const { data, error } = await supabase
-    .from('uploads')
-    .select('row_count')
+  // head + exact: the count comes back without transferring any rows, and
+  // idx_leads_workspace_created makes it an index scan.
+  const { count, error } = await supabase
+    .from('leads')
+    .select('*', { count: 'exact', head: true })
     .eq('workspace_id', workspaceId)
-    .gte('created_at', startOfMonth.toISOString());
+    .gte('created_at', startOfMonthUTC.toISOString());
 
-  if (error || !data) return 0;
-  return data.reduce((sum, u) => sum + (u.row_count || 0), 0);
+  if (error) {
+    throw new Error(`Could not check your monthly usage: ${error.message}`);
+  }
+  return count ?? 0;
 }
 
 

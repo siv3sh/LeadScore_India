@@ -14,6 +14,8 @@ export interface Subscription {
   plan: PlanType;
   status: SubStatus;
   current_period_end: string | null;
+  /** When the free plan stops accepting new leads. Null on paid plans. */
+  trial_ends_at: string | null;
   razorpay_subscription_id: string | null;
   created_at: string;
   updated_at: string;
@@ -41,6 +43,7 @@ export interface Lead {
   lead_id: string | null;
   name: string | null;
   phone: string | null;
+  city: string | null;
   source: string | null;
   created_at_lead: string | null;
   last_contacted_at: string | null;
@@ -63,34 +66,36 @@ export interface PlanInfo {
   razorpay_plan_id?: string;
 }
 
+// The monthly lead limit is rendered from `lead_limit` on its own, so it is
+// deliberately absent from `features`.
 export const PLANS: PlanInfo[] = [
   {
     id: 'free',
     name: 'Free Trial',
     price: 0,
     lead_limit: 100,
-    features: ['Up to 100 leads/month', 'Basic scoring', 'CSV export'],
+    features: ['Basic scoring', 'CSV export'],
   },
   {
     id: 'starter',
     name: 'Starter',
     price: 1999,
     lead_limit: 1000,
-    features: ['Up to 1,000 leads/month', 'Full ML scoring', 'Priority filters', 'CSV export'],
+    features: ['Full ML scoring', 'Priority filters', 'CSV export'],
   },
   {
     id: 'growth',
     name: 'Growth',
     price: 4999,
     lead_limit: 10000,
-    features: ['Up to 10,000 leads/month', 'Full ML scoring', 'Advanced filters', 'CSV export'],
+    features: ['Full ML scoring', 'Advanced filters', 'CSV export'],
   },
   {
     id: 'pro',
     name: 'Pro',
     price: 9999,
     lead_limit: 50000,
-    features: ['Up to 50,000 leads/month', 'Full ML scoring', 'All features', 'Priority support'],
+    features: ['Full ML scoring', 'All features', 'Priority support'],
   },
 ];
 

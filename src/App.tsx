@@ -1,14 +1,11 @@
-import { useState } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuth } from '@/lib/auth';
 import AuthPage from '@/pages/AuthPage';
 import Dashboard from '@/pages/Dashboard';
-import PlansPage from '@/pages/PlansPage';
 import { Loader2, TrendingUp } from 'lucide-react';
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'plans'>('dashboard');
 
   if (loading) {
     return (
@@ -27,30 +24,9 @@ function AppContent() {
     return <AuthPage />;
   }
 
-  if (view === 'plans') {
-    return <PlansPage onBack={() => setView('dashboard')} />;
-  }
-
-  return <DashboardWrapper onShowPlans={() => setView('plans')} />;
-}
-
-function DashboardWrapper({ onShowPlans }: { onShowPlans: () => void }) {
-  const { subscription } = useAuth();
-  const isFreePlan = !subscription || subscription.plan === 'free' || subscription.status !== 'active';
-
-  return (
-    <div>
-      {isFreePlan && (
-        <div className="bg-teal-700 text-white text-sm py-2 px-4 text-center">
-          You're on the Free Trial (100 leads/month).{' '}
-          <button onClick={onShowPlans} className="underline font-medium hover:text-teal-100">
-            Upgrade your plan
-          </button>
-        </div>
-      )}
-      <Dashboard onShowPlans={onShowPlans} />
-    </div>
-  );
+  // Pricing lives in a modal inside the dashboard, so there is no separate view
+  // to route to any more.
+  return <Dashboard />;
 }
 
 export default function App() {
