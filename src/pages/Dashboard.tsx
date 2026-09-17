@@ -157,7 +157,7 @@ export default function Dashboard() {
   }
 
   function handleDownloadTemplate() {
-    downloadCSV(generateTemplateCSV(), 'leadscore_template.csv');
+    downloadCSV(generateTemplateCSV(), 'leadai_template.csv');
   }
 
   function handleExport() {
@@ -226,10 +226,10 @@ export default function Dashboard() {
               </div>
               <div className="min-w-0">
                 <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">
-                  LeadScore India
+                  LeadAI
                 </h1>
                 <p className="text-[11px] text-slate-400 leading-tight truncate">
-                  Predictive lead scoring
+                  AI-powered lead scoring
                   {selectedUpload?.model_auc
                     ? ` · Model AUC ${selectedUpload.model_auc.toFixed(2)}`
                     : ''}
@@ -716,11 +716,11 @@ function UploadModal({
   }
 
   function handleDownloadTemplate() {
-    downloadCSV(generateTemplateCSV(), 'leadscore_template.csv');
+    downloadCSV(generateTemplateCSV(), 'leadai_template.csv');
   }
 
   function handleDownloadSample() {
-    downloadCSV(generateSampleCSV(), 'leadscore_sample_leads.csv');
+    downloadCSV(generateSampleCSV(), 'leadai_sample_leads.csv');
   }
 
   async function handleProcess() {
@@ -881,7 +881,7 @@ function UploadModal({
                 </div>
               )}
               <p className="text-sm text-slate-600 mb-4">
-                Map your columns to LeadScore fields. We've auto-detected the mapping — adjust if needed.
+                Map your columns to LeadAI fields. We've auto-detected the mapping — adjust if needed.
               </p>
               <div className="space-y-3">
                 <MappingField label="Name" value={mapping.name} headers={headers} onChange={(v) => setMapping({ ...mapping, name: v })} required />

@@ -1,6 +1,6 @@
-# LeadScore India
+# LeadAI
 
-Predictive lead scoring for D2C brands and local service businesses in India. Upload your leads as a CSV, get AI-powered conversion scores, and prioritize your outreach.
+AI-powered lead scoring for D2C brands and local service businesses in India. Upload your leads as a CSV or Excel file, get conversion scores, and prioritize your outreach.
 
 ## What It Does
 

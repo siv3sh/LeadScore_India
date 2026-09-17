@@ -1,8 +1,8 @@
 /*
-# LeadScore India - Core Schema
+# LeadAI - Core Schema
 
 ## Overview
-Creates the full database schema for LeadScore India, a predictive lead scoring SaaS.
+Creates the full database schema for LeadAI, an AI-powered lead scoring SaaS.
 Each authenticated user owns one workspace (brand). Users upload CSV files of leads,
 the system scores them with an in-browser ML model, and stores scored leads for
 viewing, filtering, and export.

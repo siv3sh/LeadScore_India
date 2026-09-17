@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convert the Kaggle "Sample Sales CRM Data" dataset into LeadScore India's CSV schema.
+"""Convert the Kaggle "Sample Sales CRM Data" dataset into LeadAI's CSV schema.
 
 Usage:
     kaggle datasets download -d sushicatsan/sample-sales-crm-data --unzip -p /tmp/kag/sf

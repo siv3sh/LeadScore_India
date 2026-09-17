@@ -12,7 +12,7 @@ const GSTIN: string | null = null;
 
 export const COMPANY = {
   /** The name the service trades under. */
-  tradeName: 'LeadScore India',
+  tradeName: 'LeadAI',
   /**
    * The entity that actually takes the money. Must match the account name
    * registered with Razorpay, or payouts fail verification.

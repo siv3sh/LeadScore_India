@@ -40,8 +40,8 @@ export default function AuthPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-700 text-white mb-4 shadow-lg shadow-teal-700/20">
             <TrendingUp className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">LeadScore India</h1>
-          <p className="text-sm text-slate-500 mt-1">Predictive lead scoring for D2C brands</p>
+          <h1 className="text-2xl font-bold text-slate-900">LeadAI</h1>
+          <p className="text-sm text-slate-500 mt-1">AI-powered lead scoring for D2C brands</p>
         </div>
 
         <div className="card p-8">

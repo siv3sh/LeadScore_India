@@ -109,7 +109,7 @@ export default function PricingModal({ onClose }: { onClose: () => void }) {
       const options = {
         key: key_id,
         order_id,
-        name: 'LeadScore India',
+        name: 'LeadAI',
         description: `${plan.name} Plan — ₹${plan.price.toLocaleString('en-IN')}/month`,
         // Server-derived, so the sheet can never show a different price to the
         // one the order was created for.
