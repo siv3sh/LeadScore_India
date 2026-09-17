@@ -650,6 +650,12 @@ function UploadModal({
       const text = e.target?.result as string;
       try {
         const parsed = parseCSV(text);
+        // The downloaded template is headers-only, so this is the expected
+        // state when someone uploads it before filling it in.
+        if (parsed.rows.length === 0) {
+          setError('This file has no lead rows — add your leads below the header row, then upload again.');
+          return;
+        }
         setHeaders(parsed.headers);
         setRows(parsed.rows);
         setMapping(guessColumnMapping(parsed.headers));
@@ -747,6 +753,10 @@ function UploadModal({
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleFile(file);
+                    // Chrome skips the change event when the same path is picked
+                    // again, which would strand anyone who fills in the template
+                    // and re-selects the same filename.
+                    e.target.value = '';
                   }}
                 />
               </div>
@@ -767,9 +777,9 @@ function UploadModal({
                 </button>
               </div>
               <p className="mt-2 text-xs text-slate-400">
-                The template has the right columns and three example rows showing the accepted
-                values — replace those rows with your own data. The sample is filled with demo
-                leads if you just want to see how scoring works.
+                The template is the column headers on their own — add your leads underneath, using
+                the values listed below. The sample is filled with demo leads if you just want to
+                see how scoring works.
               </p>
 
               <div className="mt-4 p-4 bg-slate-50 rounded-lg text-xs text-slate-500 space-y-2.5">

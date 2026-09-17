@@ -280,60 +280,17 @@ function toCSV(rows: CSVRow[]): string {
 
 const SAMPLE_CITIES = ['Mumbai', 'Delhi NCR', 'Bengaluru', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata', 'Kochi', 'Chandigarh', 'Jaipur'];
 
-/** Date-only is what a spreadsheet round-trips cleanly, and it parses fine. */
-function daysAgoDate(days: number): string {
-  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-}
-
 /**
- * A structure to fill in with real data, as opposed to generateSampleCSV's 50
- * rows of demo data for trying the product out.
+ * The header row on its own, for pasting real data underneath. Deliberately
+ * carries no example rows, so nothing has to be deleted before use and no
+ * invented lead can reach the scorer by accident.
  *
- * The three example rows exist to show the value vocabulary rather than to be
- * scored: one row per settled outcome, so the accepted spellings of `status`
- * and `source` are visible in the file itself. Users delete these and paste
- * their own rows.
+ * The accepted `source` and `status` values are therefore not visible in the
+ * file; the upload step states them instead. generateSampleCSV is the one that
+ * carries data, for trying the product out.
  */
 export function generateTemplateCSV(): string {
-  return toCSV([
-    {
-      lead_id: 'L1',
-      name: 'Aarav Sharma',
-      phone: '+919812345678',
-      city: 'Mumbai',
-      source: 'referral',
-      created_at: daysAgoDate(30),
-      last_contacted_at: daysAgoDate(24),
-      order_value: 8900,
-      num_orders: 1,
-      status: 'won',
-    },
-    {
-      lead_id: 'L2',
-      name: 'Priya Venkatesh',
-      phone: '+919845012233',
-      city: 'Bengaluru',
-      source: 'fb',
-      created_at: daysAgoDate(20),
-      last_contacted_at: daysAgoDate(18),
-      order_value: 0,
-      num_orders: 0,
-      status: 'lost',
-    },
-    {
-      lead_id: 'L3',
-      name: 'Rohan Mehta',
-      phone: '+919820114477',
-      city: 'Pune',
-      source: 'google',
-      created_at: daysAgoDate(10),
-      // Left blank on purpose: an optional column may be empty.
-      last_contacted_at: '',
-      order_value: 0,
-      num_orders: 0,
-      status: 'no_response',
-    },
-  ]);
+  return toCSV([]);
 }
 
 export function generateSampleCSV(): string {
