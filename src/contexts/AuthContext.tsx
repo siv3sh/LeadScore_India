@@ -76,24 +76,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signUp(email: string, password: string, workspaceName: string) {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    // The workspace and its free subscription are created by the
+    // on_auth_user_created trigger, which reads workspace_name from this
+    // metadata. Doing it here would run before a session exists and be
+    // rejected by RLS.
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { workspace_name: workspaceName } },
+    });
     if (error) return { error: error.message };
 
-    const userId = data.user?.id;
-    if (!userId) return { error: 'Sign up failed. Please try again.' };
+    if (!data.user) return { error: 'Sign up failed. Please try again.' };
 
-    const { data: ws } = await supabase
-      .from('workspaces')
-      .insert({ name: workspaceName, user_id: userId })
-      .select()
-      .single();
-
-    if (ws) {
-      await supabase.from('subscriptions').insert({
-        workspace_id: ws.id,
-        plan: 'free',
-        status: 'active',
-      });
+    if (!data.session) {
+      return { error: 'Check your email for a confirmation link to finish signing up.' };
     }
 
     return { error: null };
