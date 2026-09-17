@@ -17,17 +17,17 @@ export const COMPANY = {
    * The entity that actually takes the money. Must match the account name
    * registered with Razorpay, or payouts fail verification.
    */
-  legalName: 'CONFIRM: registered business or proprietor name',
+  legalName: 'Sivesh PB',
   address: {
-    line1: 'CONFIRM: street address',
-    city: 'CONFIRM: city',
-    state: 'CONFIRM: state',
-    pincode: 'CONFIRM: PIN code',
+    line1: 'Shornur',
+    city: 'Palakkad',
+    state: 'Kerala',
+    pincode: '679122',
     country: 'India',
   },
   supportEmail: 'hello@sivesh-pb.com',
   /** Razorpay expects a reachable number for customer disputes. */
-  supportPhone: 'CONFIRM: support phone number',
+  supportPhone: '+91 79078 40071',
   gstin: GSTIN,
   /** Working days within which support aims to reply. */
   supportResponseDays: 2,
