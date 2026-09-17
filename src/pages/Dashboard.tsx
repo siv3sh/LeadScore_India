@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Upload as UploadIcon,
   Download,
@@ -45,6 +46,7 @@ import {
   type ColumnMapping,
 } from '@/lib/csvParser';
 import { readUploadAsCsv } from '@/lib/spreadsheet';
+import { LEGAL_LINKS } from '@/lib/company';
 import {
   formatINR,
   formatSource,
@@ -593,6 +595,14 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        <div className="mt-10 pt-5 border-t border-slate-200 flex flex-wrap gap-x-5 gap-y-2">
+          {LEGAL_LINKS.map((link) => (
+            <Link key={link.to} to={link.to} className="text-xs text-slate-400 hover:text-slate-700">
+              {link.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {showPricing && <PricingModal onClose={() => setShowPricing(false)} />}

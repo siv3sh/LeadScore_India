@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { TrendingUp, Mail, Lock, Building2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { LEGAL_LINKS } from '@/lib/company';
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuth();
@@ -141,6 +143,18 @@ export default function AuthPage() {
         <p className="text-xs text-slate-400 text-center mt-6">
           Free trial includes 100 leads/month. No credit card required.
         </p>
+
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-4">
+          {LEGAL_LINKS.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className="text-xs text-slate-400 hover:text-slate-700"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
