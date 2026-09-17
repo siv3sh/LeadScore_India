@@ -21,3 +21,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Regenerable via scripts/convert_kaggle_leads.py
+test-data
