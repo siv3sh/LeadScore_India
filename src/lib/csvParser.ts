@@ -246,27 +246,118 @@ export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
   return { error: null, warnings };
 }
 
+/**
+ * The column order both generated files use. Rows are written from objects
+ * keyed by these names, so a row can never silently drift out of alignment
+ * with the header.
+ */
+const CSV_COLUMNS = [
+  'lead_id',
+  'name',
+  'phone',
+  'city',
+  'source',
+  'created_at',
+  'last_contacted_at',
+  'order_value',
+  'num_orders',
+  'status',
+] as const;
+
+type CSVRow = Partial<Record<(typeof CSV_COLUMNS)[number], string | number>>;
+
+function toCSV(rows: CSVRow[]): string {
+  const escape = (value: string | number | undefined): string => {
+    const text = String(value ?? '');
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+
+  return [
+    CSV_COLUMNS.join(','),
+    ...rows.map((row) => CSV_COLUMNS.map((column) => escape(row[column])).join(',')),
+  ].join('\n');
+}
+
+const SAMPLE_CITIES = ['Mumbai', 'Delhi NCR', 'Bengaluru', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata', 'Kochi', 'Chandigarh', 'Jaipur'];
+
+/** Date-only is what a spreadsheet round-trips cleanly, and it parses fine. */
+function daysAgoDate(days: number): string {
+  return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+}
+
+/**
+ * A structure to fill in with real data, as opposed to generateSampleCSV's 50
+ * rows of demo data for trying the product out.
+ *
+ * The three example rows exist to show the value vocabulary rather than to be
+ * scored: one row per settled outcome, so the accepted spellings of `status`
+ * and `source` are visible in the file itself. Users delete these and paste
+ * their own rows.
+ */
+export function generateTemplateCSV(): string {
+  return toCSV([
+    {
+      lead_id: 'L1',
+      name: 'Aarav Sharma',
+      phone: '+919812345678',
+      city: 'Mumbai',
+      source: 'referral',
+      created_at: daysAgoDate(30),
+      last_contacted_at: daysAgoDate(24),
+      order_value: 8900,
+      num_orders: 1,
+      status: 'won',
+    },
+    {
+      lead_id: 'L2',
+      name: 'Priya Venkatesh',
+      phone: '+919845012233',
+      city: 'Bengaluru',
+      source: 'fb',
+      created_at: daysAgoDate(20),
+      last_contacted_at: daysAgoDate(18),
+      order_value: 0,
+      num_orders: 0,
+      status: 'lost',
+    },
+    {
+      lead_id: 'L3',
+      name: 'Rohan Mehta',
+      phone: '+919820114477',
+      city: 'Pune',
+      source: 'google',
+      created_at: daysAgoDate(10),
+      // Left blank on purpose: an optional column may be empty.
+      last_contacted_at: '',
+      order_value: 0,
+      num_orders: 0,
+      status: 'no_response',
+    },
+  ]);
+}
+
 export function generateSampleCSV(): string {
-  const headers = ['lead_id', 'name', 'phone', 'city', 'source', 'created_at', 'last_contacted_at', 'order_value', 'num_orders', 'status'];
-  const sources = ['fb', 'ig', 'google', 'referral', 'walkin', 'other'];
-  const statuses = ['won', 'lost', 'no_response', 'unknown'];
-  const cities = ['Mumbai', 'Delhi NCR', 'Bengaluru', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata', 'Kochi', 'Chandigarh', 'Jaipur'];
+  const statuses = [...RESOLVED_STATUSES, 'unknown'];
   const names = ['Aarav Sharma', 'Vivaan Gupta', 'Aditya Verma', 'Vihaan Reddy', 'Arjun Singh', 'Sai Patel', 'Reyansh Kumar', 'Ayaan Mehta', 'Krishna Nair', 'Ishaan Joshi', 'Ananya Rao', 'Diya Iyer', 'Saanvi Menon', 'Aadhya Pillai', 'Kiara Nair', 'Myra Sharma', 'Anika Reddy', 'Pari Gupta', 'Riya Das', 'Sara Khan'];
 
-  const rows: string[] = [headers.join(',')];
   const now = Date.now();
+  const rows: CSVRow[] = [];
   for (let i = 0; i < 50; i++) {
-    const name = names[i % names.length];
-    const phone = `+91${Math.floor(60000 + Math.random() * 39999)}${Math.floor(10000 + Math.random() * 89999)}`;
-    const source = sources[Math.floor(Math.random() * sources.length)];
-    const created = new Date(now - Math.floor(Math.random() * 60) * 86400000).toISOString();
     const hasContact = Math.random() > 0.4;
-    const lastContact = hasContact ? new Date(now - Math.floor(Math.random() * 30) * 86400000).toISOString() : '';
-    const orderValue = Math.random() > 0.5 ? Math.floor(Math.random() * 5000) + 200 : 0;
-    const numOrders = Math.random() > 0.6 ? Math.floor(Math.random() * 5) + 1 : 0;
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
-    const city = cities[Math.floor(Math.random() * cities.length)];
-    rows.push([`L${i + 1}`, name, phone, city, source, created, lastContact, orderValue, numOrders, status].join(','));
+    rows.push({
+      lead_id: `L${i + 1}`,
+      name: names[i % names.length],
+      phone: `+91${Math.floor(60000 + Math.random() * 39999)}${Math.floor(10000 + Math.random() * 89999)}`,
+      city: SAMPLE_CITIES[Math.floor(Math.random() * SAMPLE_CITIES.length)],
+      source: SOURCES[Math.floor(Math.random() * SOURCES.length)],
+      created_at: new Date(now - Math.floor(Math.random() * 60) * 86400000).toISOString(),
+      last_contacted_at: hasContact
+        ? new Date(now - Math.floor(Math.random() * 30) * 86400000).toISOString()
+        : '',
+      order_value: Math.random() > 0.5 ? Math.floor(Math.random() * 5000) + 200 : 0,
+      num_orders: Math.random() > 0.6 ? Math.floor(Math.random() * 5) + 1 : 0,
+      status: statuses[Math.floor(Math.random() * statuses.length)],
+    });
   }
-  return rows.join('\n');
+  return toCSV(rows);
 }

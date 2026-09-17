@@ -35,8 +35,12 @@ import {
   parseCSV,
   guessColumnMapping,
   generateSampleCSV,
+  generateTemplateCSV,
   summarizeStatuses,
   RESOLVED_STATUSES,
+  REQUIRED_COLUMNS,
+  OPTIONAL_COLUMNS,
+  SOURCES,
   type ColumnMapping,
 } from '@/lib/csvParser';
 import {
@@ -147,7 +151,7 @@ export default function Dashboard() {
   }
 
   function handleDownloadTemplate() {
-    downloadCSV(generateSampleCSV(), 'leadscore_template.csv');
+    downloadCSV(generateTemplateCSV(), 'leadscore_template.csv');
   }
 
   function handleExport() {
@@ -660,6 +664,10 @@ function UploadModal({
     reader.readAsText(file);
   }
 
+  function handleDownloadTemplate() {
+    downloadCSV(generateTemplateCSV(), 'leadscore_template.csv');
+  }
+
   function handleDownloadSample() {
     downloadCSV(generateSampleCSV(), 'leadscore_sample_leads.csv');
   }
@@ -742,17 +750,49 @@ function UploadModal({
                   }}
                 />
               </div>
-              <div className="mt-4">
-                <button onClick={handleDownloadSample} className="text-sm text-teal-700 hover:underline flex items-center gap-1.5">
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="text-sm text-teal-700 hover:underline flex items-center gap-1.5"
+                >
+                  <FileText className="w-4 h-4" />
+                  Download template
+                </button>
+                <button
+                  onClick={handleDownloadSample}
+                  className="text-sm text-slate-500 hover:text-slate-700 hover:underline flex items-center gap-1.5"
+                >
                   <Download className="w-4 h-4" />
-                  Download sample CSV template
+                  Download 50-row sample
                 </button>
               </div>
-              <div className="mt-4 p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
-                <p className="font-medium text-slate-600 mb-1">Required columns:</p>
-                <p>name, phone, source, created_at, order_value, num_orders, status</p>
-                <p className="font-medium text-slate-600 mt-2 mb-1">Optional columns:</p>
-                <p>lead_id, city, last_contacted_at</p>
+              <p className="mt-2 text-xs text-slate-400">
+                The template has the right columns and three example rows showing the accepted
+                values — replace those rows with your own data. The sample is filled with demo
+                leads if you just want to see how scoring works.
+              </p>
+
+              <div className="mt-4 p-4 bg-slate-50 rounded-lg text-xs text-slate-500 space-y-2.5">
+                <div>
+                  <p className="font-medium text-slate-600 mb-0.5">Required columns</p>
+                  <p>{REQUIRED_COLUMNS.join(', ')}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-600 mb-0.5">Optional columns</p>
+                  <p>{OPTIONAL_COLUMNS.join(', ')}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-600 mb-0.5">Accepted source values</p>
+                  <p>{SOURCES.join(', ')} — any other value is ignored when scoring</p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-600 mb-0.5">Accepted status values</p>
+                  <p>
+                    {RESOLVED_STATUSES.join(', ')} are what the model learns from, and at least one{' '}
+                    <span className="font-medium">won</span> lead is required. Open stages such as
+                    new or contacted are scored but not trained on.
+                  </p>
+                </div>
               </div>
             </div>
           )}
