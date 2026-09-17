@@ -25,3 +25,4 @@ dist-ssr
 # Regenerable via scripts/convert_kaggle_leads.py
 test-data
 .vercel
+supabase/.temp/
