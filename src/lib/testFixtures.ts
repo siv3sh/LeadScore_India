@@ -63,6 +63,34 @@ export function zeroSignalLeads({ count, won }: { count: number; won: number }):
   );
 }
 
+/** The canonical template header, matching CSV_COLUMNS in csvParser. */
+export const CSV_HEADER =
+  'lead_id,name,phone,city,source,created_at,last_contacted_at,order_value,num_orders,status';
+
+/**
+ * A CSV whose only interesting variable is the status column, for exercising the
+ * upload pipeline's validation. An empty array yields a headers-only file, which
+ * is what the downloaded template looks like before anyone fills it in.
+ */
+export function csvWithStatuses(statuses: string[]): string {
+  const rows = statuses.map((status, i) => {
+    const day = String((i % 28) + 1).padStart(2, '0');
+    return [
+      `L${i + 1}`,
+      `Lead ${i + 1}`,
+      '9876543210',
+      'Mumbai',
+      i % 2 === 0 ? 'fb' : 'referral',
+      `2026-09-${day}T09:00:00.000Z`,
+      '',
+      '0',
+      '0',
+      status,
+    ].join(',');
+  });
+  return [CSV_HEADER, ...rows].join('\n');
+}
+
 /** A labelled set of an exact shape, for probing the training thresholds. */
 export function labelledLeads({
   won,
