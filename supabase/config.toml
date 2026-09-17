@@ -1,0 +1,5 @@
+[functions.razorpay-checkout]
+verify_jwt = true
+
+[functions.razorpay-verify]
+verify_jwt = true
