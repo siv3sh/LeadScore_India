@@ -7,7 +7,7 @@ import PlansPage from '@/pages/PlansPage';
 import { Loader2, TrendingUp } from 'lucide-react';
 
 function AppContent() {
-  const { user, workspace, loading } = useAuth();
+  const { user, loading } = useAuth();
   const [view, setView] = useState<'dashboard' | 'plans'>('dashboard');
 
   if (loading) {

@@ -33,12 +33,13 @@ import {
   generateSampleCSV,
   type ColumnMapping,
 } from '@/lib/csvParser';
+import LeadCharts from '@/components/LeadCharts';
 import { getPlan, type Priority } from '@/types';
 import { getPriorityColor } from '@/lib/ml';
 import type { Upload, Lead } from '@/types';
 
 export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) {
-  const { user, workspace, subscription, signOut, refreshWorkspace } = useAuth();
+  const { workspace, subscription, signOut, refreshWorkspace } = useAuth();
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedUpload, setSelectedUpload] = useState<Upload | null>(null);
@@ -90,6 +91,7 @@ export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) 
   }
 
   async function handleDeleteUpload(uploadId: string) {
+    if (!workspace) return;
     if (!confirm('Delete this upload and all its leads? This cannot be undone.')) return;
     try {
       await deleteUpload(uploadId);
@@ -98,7 +100,7 @@ export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) 
       if (selectedUpload?.id === uploadId) {
         setSelectedUpload(ups[0] ?? null);
         if (ups[0]) {
-          const ls = await fetchLeads(workspace!.id, ups[0].id);
+          const ls = await fetchLeads(workspace.id, ups[0].id);
           setLeads(ls);
         } else {
           setLeads([]);
@@ -141,6 +143,26 @@ export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) 
     avgScore: leads.length > 0 ? Math.round(leads.reduce((s, l) => s + (l.score_0_100 ?? 0), 0) / leads.length) : 0,
     conversionRate: selectedUpload?.conversion_rate ?? 0,
   };
+
+  // Guaranteed by the on_auth_user_created trigger, so reaching this means
+  // something is genuinely wrong — say so rather than crashing on workspace!.id.
+  if (!workspace) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="card p-8 max-w-md text-center">
+          <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-3" />
+          <h2 className="text-lg font-bold text-slate-900 mb-1">No workspace found</h2>
+          <p className="text-sm text-slate-500 mb-5">
+            Your account exists but has no workspace attached, so there's nothing to load. Signing out
+            and back in usually fixes this.
+          </p>
+          <button onClick={signOut} className="btn-primary">
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -257,6 +279,10 @@ export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) 
           </div>
         )}
 
+        {/* Charts summarise the whole upload, matching the stat cards above rather
+            than the filtered table below. */}
+        <LeadCharts leads={leads} />
+
         {/* Model metrics */}
         {selectedUpload && selectedUpload.model_auc !== null && selectedUpload.model_auc > 0 && (
           <div className="card p-4 mb-6">
@@ -266,10 +292,12 @@ export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) 
               <span className="text-slate-400 mx-1">·</span>
               <span className="text-slate-500 text-xs">
                 {selectedUpload.model_auc >= 0.7
-                  ? 'Good discriminative ability'
+                  ? 'Good — the ranking is clearly better than chance'
                   : selectedUpload.model_auc >= 0.6
-                  ? 'Moderate — more data will improve accuracy'
-                  : 'Limited — upload more leads for better scoring'}
+                  ? 'Moderate — a usable signal, but a weak one'
+                  : selectedUpload.model_auc >= 0.55
+                  ? 'Weak — barely better than random ordering'
+                  : 'No signal — this data cannot predict conversion (0.50 is guessing)'}
               </span>
             </div>
           </div>
@@ -406,7 +434,7 @@ export default function Dashboard({ onShowPlans }: { onShowPlans: () => void }) 
 
       {showUploadModal && (
         <UploadModal
-          workspaceId={workspace!.id}
+          workspaceId={workspace.id}
           planLimit={plan.lead_limit}
           onClose={() => setShowUploadModal(false)}
           onSuccess={async () => {
@@ -635,14 +663,27 @@ function UploadModal({
                       <p className="font-bold text-slate-800">{(result.metrics.accuracy * 100).toFixed(0)}%</p>
                     </div>
                     <div className="p-3 rounded-lg bg-slate-50">
-                      <p className="text-xs text-slate-500">Precision</p>
+                      <p className="text-xs text-slate-500">Precision (top 20%)</p>
                       <p className="font-bold text-slate-800">{(result.metrics.precision * 100).toFixed(0)}%</p>
                     </div>
                     <div className="p-3 rounded-lg bg-slate-50">
-                      <p className="text-xs text-slate-500">Recall</p>
+                      <p className="text-xs text-slate-500">Recall (top 20%)</p>
                       <p className="font-bold text-slate-800">{(result.metrics.recall * 100).toFixed(0)}%</p>
                     </div>
                   </div>
+                  {result.warnings.length > 0 && (
+                    <div className="mt-4 max-w-sm mx-auto text-left space-y-2">
+                      {result.warnings.map((warning) => (
+                        <div
+                          key={warning}
+                          className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+                        >
+                          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span>{warning}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 <>
