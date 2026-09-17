@@ -13,6 +13,7 @@ import {
   type ColumnMapping,
   type RawLead,
 } from './csvParser';
+import { makeLead } from './testFixtures';
 
 const TEMPLATE_HEADERS = [
   'lead_id',
@@ -26,22 +27,6 @@ const TEMPLATE_HEADERS = [
   'num_orders',
   'status',
 ];
-
-function lead(overrides: Partial<RawLead> = {}): RawLead {
-  return {
-    lead_id: 'L1',
-    name: 'Aarav Sharma',
-    phone: '9876543210',
-    city: 'Mumbai',
-    source: 'fb',
-    created_at: '2026-09-01T00:00:00.000Z',
-    last_contacted_at: null,
-    order_value: 0,
-    num_orders: 0,
-    status: 'lost',
-    ...overrides,
-  };
-}
 
 describe('parseCSV', () => {
   it('lowercases and trims headers so mapping is case-insensitive', () => {
@@ -87,14 +72,35 @@ describe('parseCSV', () => {
 describe('normalizeStatus', () => {
   // RESOLVED_STATUSES are underscored, so a CRM exporting "No Response" has to
   // normalise to a trainable outcome instead of looking like an open stage.
+  it('maps every realistic spelling of no_response onto one value', () => {
+    for (const spelling of [
+      'No Response',
+      'no-response',
+      ' NO_RESPONSE ',
+      'no response',
+      'No-Response',
+      'NO   RESPONSE',
+      'no_response',
+    ]) {
+      expect(normalizeStatus(spelling)).toBe('no_response');
+    }
+  });
+
   it('collapses separators to underscores', () => {
-    expect(normalizeStatus('No Response')).toBe('no_response');
     expect(normalizeStatus('Follow-Up')).toBe('follow_up');
     expect(normalizeStatus('follow   up')).toBe('follow_up');
+    expect(normalizeStatus('Closed - Won')).toBe('closed_won');
   });
 
   it('lowercases and trims', () => {
     expect(normalizeStatus('  WON  ')).toBe('won');
+    expect(normalizeStatus('Lost')).toBe('lost');
+  });
+
+  // "Closed Won" is a real CRM value that does NOT normalise to 'won', so it is
+  // treated as an open stage and dropped from training. Documented, not fixed.
+  it('does not infer an outcome from a compound stage name', () => {
+    expect(RESOLVED_STATUSES).not.toContain(normalizeStatus('Closed Won'));
   });
 
   it('treats a blank status as unknown', () => {
@@ -151,19 +157,46 @@ describe('guessColumnMapping', () => {
     expect(guessColumnMapping(['name', 'phone', 'status']).last_contacted_at).toBeUndefined();
   });
 
-  // The two cases below fail on purpose: matching is substring-based and picks
-  // the first *header* that contains any candidate, rather than the best
-  // candidate, so a decoy column wins. Turn these into `it` when that is fixed.
-  it.fails('should prefer "lead source" over a "lead origin" decoy', () => {
+});
+
+/**
+ * Characterisation tests: these lock in today's WRONG answers so a future fix
+ * has a baseline to diff against. They are not statements of desired behaviour.
+ *
+ * The cause is in guessColumnMapping's matcher, which scans headers in file
+ * order and takes the first header containing ANY candidate substring, rather
+ * than scanning candidates in priority order. A decoy column therefore wins
+ * whenever it happens to sit to the left of the real one.
+ *
+ * When this is fixed, every expectation below should flip to the value named in
+ * its comment, and these tests will fail until they are updated. That failure is
+ * the intended signal.
+ */
+describe('guessColumnMapping known misfires (current behaviour, not desired)', () => {
+  it('picks a "lead origin" decoy over the real "lead source"', () => {
+    // Should be 'lead source'.
     expect(guessColumnMapping(['name', 'phone', 'lead origin', 'lead source']).source).toBe(
-      'lead source'
+      'lead origin'
     );
   });
 
-  it.fails('should not match "date" inside an unrelated "updates" column', () => {
+  it('matches "date" inside an unrelated "updates" column', () => {
+    // Should be 'created_at'.
     expect(guessColumnMapping(['name', 'phone', 'updates', 'created_at']).created_at).toBe(
-      'created_at'
+      'updates'
     );
+  });
+
+  it('matches the bare "id" candidate inside an unrelated column', () => {
+    // Should be undefined, or 'lead_id' when one is present.
+    expect(guessColumnMapping(['valid_email', 'name', 'phone']).lead_id).toBe('valid_email');
+  });
+
+  it('lets an "amount" column win over an explicit "order_value"', () => {
+    // Should be 'order_value'.
+    expect(
+      guessColumnMapping(['name', 'phone', 'discount_amount', 'order_value']).order_value
+    ).toBe('discount_amount');
   });
 });
 
@@ -292,9 +325,9 @@ describe('summarizeStatuses', () => {
 describe('validateLeadsForScoring', () => {
   it('accepts a file with a genuine mix of outcomes', () => {
     const result = validateLeadsForScoring([
-      lead({ status: 'won' }),
-      lead({ status: 'lost' }),
-      lead({ status: 'no_response' }),
+      makeLead({ status: 'won' }),
+      makeLead({ status: 'lost' }),
+      makeLead({ status: 'no_response' }),
     ]);
     expect(result.error).toBeNull();
     expect(result.warnings).toEqual([]);
@@ -303,20 +336,20 @@ describe('validateLeadsForScoring', () => {
   // The label is derived solely from status === 'won', so without one the model
   // trains on an all-zero target and scores every lead identically.
   it('rejects a file with no won leads', () => {
-    const result = validateLeadsForScoring([lead({ status: 'lost' }), lead({ status: 'new' })]);
+    const result = validateLeadsForScoring([makeLead({ status: 'lost' }), makeLead({ status: 'new' })]);
     expect(result.error).toContain("No leads have status 'won'");
   });
 
   it('warns when there are no negative examples to contrast against', () => {
-    const result = validateLeadsForScoring([lead({ status: 'won' }), lead({ status: 'new' })]);
+    const result = validateLeadsForScoring([makeLead({ status: 'won' }), makeLead({ status: 'new' })]);
     expect(result.error).toBeNull();
     expect(result.warnings.join(' ')).toContain('no examples of a lead that did not convert');
   });
 
   it('warns when no source value is one the model encodes', () => {
     const result = validateLeadsForScoring([
-      lead({ status: 'won', source: 'justdial' }),
-      lead({ status: 'lost', source: 'justdial' }),
+      makeLead({ status: 'won', source: 'justdial' }),
+      makeLead({ status: 'lost', source: 'justdial' }),
     ]);
     expect(result.warnings.join(' ')).toContain('No lead source matched');
   });
