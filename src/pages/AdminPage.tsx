@@ -77,11 +77,15 @@ export default function AdminPage() {
     return <Navigate to="/" replace />;
   }
 
+  // List + plan stats are customer accounts only; keep full `rows` for audit emails.
   const visible = filterAdminUsers(rows, { search, plan: planFilter });
   const stats = buildAdminStats(rows);
+  const customerCount = stats.totalAccounts;
   const emailByUserId = new Map(rows.map((row) => [row.userId, row.email]));
   const brandByWorkspaceId = new Map(
-    rows.filter((row) => row.workspaceId).map((row) => [row.workspaceId, row.workspaceName])
+    rows
+      .filter((row) => !row.isAdmin && row.workspaceId)
+      .map((row) => [row.workspaceId, row.workspaceName])
   );
 
   const summaryCards = [
@@ -195,8 +199,8 @@ export default function AdminPage() {
           ) : visible.length === 0 ? (
             <div className="p-10 text-center">
               <p className="text-sm text-slate-500">
-                {rows.length === 0
-                  ? 'No accounts found.'
+                {customerCount === 0
+                  ? 'No customer accounts yet.'
                   : 'No accounts match this search or plan.'}
               </p>
             </div>

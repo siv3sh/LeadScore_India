@@ -87,13 +87,18 @@ export function buildAdminUserRows(
   return rows.sort((a, b) => (b.signedUpAt ?? '').localeCompare(a.signedUpAt ?? ''));
 }
 
+/** Customer accounts only — admins operate the panel and are not billed users. */
+export function customerAdminRows(rows: AdminUserRow[]): AdminUserRow[] {
+  return rows.filter((row) => !row.isAdmin);
+}
+
 export function filterAdminUsers(
   rows: AdminUserRow[],
   { search, plan }: AdminUserFilters
 ): AdminUserRow[] {
   const needle = search.trim().toLowerCase();
 
-  return rows.filter((row) => {
+  return customerAdminRows(rows).filter((row) => {
     if (plan !== 'all' && row.plan !== plan) return false;
     if (needle && !row.email.toLowerCase().includes(needle)) return false;
     return true;
@@ -153,8 +158,11 @@ export interface AdminStats {
 
 /** `now` is injected so the expired-trial count is testable without the clock. */
 export function buildAdminStats(rows: AdminUserRow[], now: number = Date.now()): AdminStats {
+  // Stats and plan breakdowns are for customer accounts only.
+  const customers = customerAdminRows(rows);
+
   const counts = new Map<string, number>();
-  for (const row of rows) {
+  for (const row of customers) {
     counts.set(row.plan, (counts.get(row.plan) ?? 0) + 1);
   }
 
@@ -175,12 +183,12 @@ export function buildAdminStats(rows: AdminUserRow[], now: number = Date.now()):
   };
 
   return {
-    totalAccounts: rows.length,
+    totalAccounts: customers.length,
     admins: rows.filter((row) => row.isAdmin).length,
-    paidAccounts: rows.filter((row) => row.plan !== 'free').length,
-    manualGrants: rows.filter((row) => row.planSource === 'manual').length,
-    expiredTrials: rows.filter(isExpiredTrial).length,
-    leadsThisMonth: rows.reduce((total, row) => total + row.leadsThisMonth, 0),
+    paidAccounts: customers.filter((row) => row.plan !== 'free').length,
+    manualGrants: customers.filter((row) => row.planSource === 'manual').length,
+    expiredTrials: customers.filter(isExpiredTrial).length,
+    leadsThisMonth: customers.reduce((total, row) => total + row.leadsThisMonth, 0),
     byPlan,
   };
 }
@@ -237,6 +245,10 @@ export async function applyPlanOverride(
 ): Promise<void> {
   const problem = validatePlanOverride(input);
   if (problem) throw new Error(problem);
+
+  if (row.isAdmin) {
+    throw new Error('Admin accounts are not managed as customer plans.');
+  }
 
   if (!row.workspaceId) {
     throw new Error('This account has no workspace, so its plan cannot be changed.');
