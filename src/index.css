@@ -7,11 +7,18 @@
     --color-primary: #0f766e;
     --color-primary-dark: #115e59;
     --color-primary-light: #14b8a6;
+    --landing-ink: #0c4a46;
+    --landing-deep: #0a3d3a;
   }
 
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
+  }
+
+  .font-display {
+    font-family: 'Fraunces', Georgia, serif;
+    font-optical-sizing: auto;
   }
 }
 
@@ -38,6 +45,95 @@
 
   .card {
     @apply bg-white rounded-xl border border-slate-200 shadow-sm;
+  }
+
+  .landing-section {
+    @apply py-16 sm:py-20;
+  }
+
+  .landing-cta-primary {
+    @apply bg-white text-teal-950 font-semibold px-5 py-3 rounded-lg text-sm hover:bg-teal-50 transition-colors duration-200;
+  }
+
+  .landing-cta-ghost {
+    @apply text-sm text-teal-100/80 hover:text-white underline-offset-4 hover:underline transition-colors;
+  }
+
+  .landing-hero-bg {
+    background:
+      radial-gradient(ellipse 80% 60% at 70% 20%, rgba(45, 212, 191, 0.12), transparent 55%),
+      linear-gradient(165deg, var(--landing-deep) 0%, var(--landing-ink) 45%, #134e4a 100%);
+  }
+
+  .landing-hero-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.35;
+    background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23ffffff' fill-opacity='0.04' fill-rule='evenodd'%3E%3Cpath d='M0 40L40 0H20L0 20M40 40V20L20 40'/%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  .landing-mockup {
+    max-width: 36rem;
+    margin-inline: auto;
+  }
+
+  @media (min-width: 640px) {
+    .landing-mockup {
+      margin-inline: 0;
+      max-width: 28rem;
+    }
+  }
+
+  .landing-mockup-inner {
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(8, 40, 38, 0.55);
+    backdrop-filter: blur(8px);
+    overflow: hidden;
+  }
+
+  .landing-mockup-row {
+    opacity: 0;
+    animation: landing-row-in 0.5s ease-out forwards;
+  }
+
+  .landing-fade-up {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: landing-fade-up 0.7s ease-out forwards;
+  }
+
+  .landing-fade-up-delay {
+    animation-delay: 0.15s;
+  }
+}
+
+@keyframes landing-fade-up {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-fade-up,
+  .landing-mockup-row {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }
 

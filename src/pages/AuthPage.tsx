@@ -1,17 +1,27 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { TrendingUp, Mail, Lock, Building2, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { LEGAL_LINKS } from '@/lib/company';
+import { COMPANY, LEGAL_LINKS } from '@/lib/company';
+import { PLANS } from '@/types';
 
 export default function AuthPage() {
   const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [mode, setMode] = useState<'signin' | 'signup'>(
+    location.pathname === '/signup' ? 'signup' : 'signin'
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [workspaceName, setWorkspaceName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setMode(location.pathname === '/signup' ? 'signup' : 'signin');
+    setError(null);
+  }, [location.pathname]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,14 +50,15 @@ export default function AuthPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-700 text-white mb-4 shadow-lg shadow-teal-700/20">
             <TrendingUp className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">LeadAI</h1>
-          <p className="text-sm text-slate-500 mt-1">AI-powered lead scoring for D2C brands</p>
+          <h1 className="text-2xl font-bold text-slate-900">{COMPANY.tradeName}</h1>
+          <p className="text-sm text-slate-500 mt-1">Stop guessing who to call first</p>
         </div>
 
         <div className="card p-8">
           <div className="flex gap-1 p-1 bg-slate-100 rounded-lg mb-6">
             <button
-              onClick={() => setMode('signin')}
+              type="button"
+              onClick={() => navigate('/login')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
                 mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
@@ -55,7 +66,8 @@ export default function AuthPage() {
               Sign In
             </button>
             <button
-              onClick={() => setMode('signup')}
+              type="button"
+              onClick={() => navigate('/signup')}
               className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
                 mode === 'signup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
               }`}
@@ -129,10 +141,8 @@ export default function AuthPage() {
           <p className="text-xs text-slate-400 text-center mt-6">
             {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
             <button
-              onClick={() => {
-                setMode(mode === 'signin' ? 'signup' : 'signin');
-                setError(null);
-              }}
+              type="button"
+              onClick={() => navigate(mode === 'signin' ? '/signup' : '/login')}
               className="text-teal-700 font-medium hover:underline"
             >
               {mode === 'signin' ? 'Sign up' : 'Sign in'}
@@ -141,7 +151,14 @@ export default function AuthPage() {
         </div>
 
         <p className="text-xs text-slate-400 text-center mt-6">
-          Free trial includes 100 leads/month. No credit card required.
+          Free trial includes {PLANS[0].lead_limit.toLocaleString('en-IN')} leads/month. No credit
+          card required.
+        </p>
+
+        <p className="text-xs text-center mt-3">
+          <Link to="/" className="text-slate-400 hover:text-slate-700">
+            ← Back to home
+          </Link>
         </p>
 
         <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-4">
