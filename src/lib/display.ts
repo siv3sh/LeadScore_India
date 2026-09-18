@@ -34,12 +34,12 @@ interface StatusStyle {
 const STATUS_STYLES: Record<string, StatusStyle> = {
   new: { label: 'New', className: 'text-sky-700 bg-sky-50 border-sky-200' },
   contacted: { label: 'Contacted', className: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
-  follow_up: { label: 'Follow Up', className: 'text-amber-700 bg-amber-50 border-amber-200' },
+  follow_up: { label: 'Follow-up', className: 'text-amber-700 bg-amber-50 border-amber-200' },
   qualified: { label: 'Qualified', className: 'text-violet-700 bg-violet-50 border-violet-200' },
-  won: { label: 'Won', className: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  lost: { label: 'Lost', className: 'text-red-700 bg-red-50 border-red-200' },
-  no_response: { label: 'No Response', className: 'text-slate-600 bg-slate-50 border-slate-200' },
-  unknown: { label: 'Unknown', className: 'text-slate-600 bg-slate-50 border-slate-200' },
+  won: { label: 'Converted', className: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  lost: { label: 'Not converted', className: 'text-red-700 bg-red-50 border-red-200' },
+  no_response: { label: 'No response', className: 'text-slate-600 bg-slate-50 border-slate-200' },
+  unknown: { label: 'Open', className: 'text-slate-600 bg-slate-50 border-slate-200' },
 };
 
 export function formatStatus(status: string | null): StatusStyle {

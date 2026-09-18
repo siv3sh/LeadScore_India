@@ -863,9 +863,10 @@ function UploadModal({
                 <div>
                   <p className="font-medium text-slate-600 mb-0.5">Accepted status values</p>
                   <p>
-                    {RESOLVED_STATUSES.join(', ')} are what the model learns from, and at least one{' '}
-                    <span className="font-medium">won</span> lead is required. Open stages such as
-                    new or contacted are scored but not trained on.
+                    {RESOLVED_STATUSES.join(', ')} are settled outcomes the model learns from (shown
+                    as Converted / Not converted / No response). At least one{' '}
+                    <span className="font-medium">won</span> (converted) lead is required. Open
+                    stages such as new, contacted, or unknown are scored but not used for training.
                   </p>
                 </div>
               </div>
@@ -1000,16 +1001,16 @@ function StatusGuidance({
       )}
       {summary.wonCount === 0 && (
         <p className="text-amber-700">
-          Nothing is marked <span className="font-medium">won</span>, so there is no outcome to
-          learn. Map a column whose values include won, or rename your converted status to
-          "won" before uploading.
+          Nothing is marked as converted (<span className="font-medium">won</span>), so there is
+          no outcome to learn. Map a column that includes converted leads, or set those rows to
+          &quot;won&quot; in your file before uploading.
         </p>
       )}
       {summary.wonCount > 0 && !hasNegatives && (
         <p className="text-amber-700">
-          Every settled lead is won, so the model has no failed example to contrast against and
-          will fall back to a simple source-and-recency ranking. Include lost or no_response
-          leads for a real model.
+          Every settled lead is converted, so the model has no contrast cases. Include not
+          converted (<span className="font-medium">lost</span>) or no-response leads for a real
+          ranking model.
         </p>
       )}
     </div>

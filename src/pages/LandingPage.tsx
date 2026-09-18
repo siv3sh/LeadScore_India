@@ -373,7 +373,8 @@ export default function LandingPage() {
                 No. It improves your call order based on patterns in your own past leads — source,
                 timing, recency, and what converted before. It is not a guarantee that someone will
                 buy, and it is not magic. The ranking gets more useful the more settled history you
-                upload (won / lost / no response). Think better prioritisation, not prophecy.
+                upload (converted / not converted / no response). Think better prioritisation, not
+                prophecy.
               </dd>
             </div>
             <div>

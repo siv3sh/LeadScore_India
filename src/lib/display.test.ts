@@ -37,24 +37,24 @@ describe('formatSource', () => {
 
 describe('formatStatus', () => {
   it('styles the settled outcomes the model trains on', () => {
-    expect(formatStatus('won').label).toBe('Won');
-    expect(formatStatus('lost').label).toBe('Lost');
-    expect(formatStatus('no_response').label).toBe('No Response');
+    expect(formatStatus('won').label).toBe('Converted');
+    expect(formatStatus('lost').label).toBe('Not converted');
+    expect(formatStatus('no_response').label).toBe('No response');
   });
 
   it('styles the open pipeline stages a CRM exports', () => {
     expect(formatStatus('new').label).toBe('New');
     expect(formatStatus('contacted').label).toBe('Contacted');
-    expect(formatStatus('follow_up').label).toBe('Follow Up');
+    expect(formatStatus('follow_up').label).toBe('Follow-up');
     expect(formatStatus('qualified').label).toBe('Qualified');
   });
 
   // Same separator normalisation as normalizeStatus in csvParser, so a CRM
   // exporting "No Response" is styled as the outcome rather than as unknown.
   it('normalises spaces and hyphens before matching', () => {
-    expect(formatStatus('No Response').label).toBe('No Response');
-    expect(formatStatus('Follow-Up').label).toBe('Follow Up');
-    expect(formatStatus('  WON  ').label).toBe('Won');
+    expect(formatStatus('No Response').label).toBe('No response');
+    expect(formatStatus('Follow-Up').label).toBe('Follow-up');
+    expect(formatStatus('  WON  ').label).toBe('Converted');
   });
 
   it('shows an unrecognised status neutrally rather than hiding it', () => {
@@ -63,8 +63,8 @@ describe('formatStatus', () => {
     expect(styled.className).toContain('slate');
   });
 
-  it('treats a missing status as unknown', () => {
-    expect(formatStatus(null).label).toBe('Unknown');
+  it('treats a missing status as open', () => {
+    expect(formatStatus(null).label).toBe('Open');
   });
 });
 
