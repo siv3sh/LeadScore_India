@@ -6,12 +6,18 @@ import {
   PhoneCall,
   TrendingUp,
 } from 'lucide-react';
-import { COMPANY, LEGAL_LINKS } from '@/lib/company';
+import { COMPANY, LEGAL_LINKS, formattedAddress } from '@/lib/company';
 import { TRIAL_DAYS } from '@/lib/trial';
 import { getPlan, PLANS, type PlanInfo } from '@/types';
 
 const POPULAR_PLAN_ID = 'growth';
 const FREE_PLAN = getPlan('free');
+const TRUST_LINES = [
+  `${TRIAL_DAYS}-day free trial`,
+  'No card required',
+  'Prices in ₹',
+  `${COMPANY.refundWindowDays}-day refund window`,
+] as const;
 
 function formatPrice(plan: PlanInfo): string {
   if (plan.price === 0) return 'Free';
@@ -114,12 +120,20 @@ export default function LandingPage() {
               {COMPANY.tradeName}
             </span>
           </div>
-          <Link
-            to="/login"
-            className="text-sm text-teal-50/80 hover:text-white transition-colors"
-          >
-            Sign in
-          </Link>
+          <nav className="flex items-center gap-5">
+            <a
+              href="#pricing"
+              className="hidden sm:inline text-sm text-teal-50/80 hover:text-white transition-colors"
+            >
+              Pricing
+            </a>
+            <Link
+              to="/login"
+              className="text-sm text-teal-50/80 hover:text-white transition-colors"
+            >
+              Sign in
+            </Link>
+          </nav>
         </div>
       </header>
 
@@ -147,6 +161,9 @@ export default function LandingPage() {
                 See how it works
               </a>
             </div>
+            <p className="mt-5 text-[12px] sm:text-[13px] text-teal-100/55 tracking-wide">
+              {TRUST_LINES.join(' · ')}
+            </p>
           </div>
 
           <div className="mt-12 sm:mt-16 landing-fade-up landing-fade-up-delay">
@@ -222,6 +239,54 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* 3b. Straight talk — trust without fake social proof */}
+      <section className="landing-section border-b border-slate-200/80 bg-[#f7faf9]">
+        <div className="max-w-3xl mx-auto px-5">
+          <h2 className="font-display text-2xl sm:text-3xl text-slate-900 tracking-tight mb-5">
+            Straight with you
+          </h2>
+          <p className="text-[15px] sm:text-base text-slate-600 leading-relaxed mb-8">
+            {COMPANY.tradeName} reorders who you call next using patterns in{' '}
+            <em className="not-italic font-medium text-slate-800">your</em> past leads. It does
+            not invent buyers, scrape the internet for scores, or promise a conversion rate.
+          </p>
+          <ul className="space-y-5 text-[15px] text-slate-600 leading-relaxed">
+            <li className="pl-4 border-l-2 border-teal-700/40">
+              <span className="block font-semibold text-slate-900 mb-1">Your history, your order</span>
+              Source, timing, recency, and past outcomes from the file you upload — nothing else.
+            </li>
+            <li className="pl-4 border-l-2 border-teal-700/40">
+              <span className="block font-semibold text-slate-900 mb-1">Your customer data stays yours</span>
+              Leads are uploaded so we can score them for your workspace. We don&apos;t sell them.
+              Read how we handle data in our{' '}
+              <Link to="/privacy" className="text-teal-800 font-medium underline-offset-2 hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </li>
+            <li className="pl-4 border-l-2 border-teal-700/40">
+              <span className="block font-semibold text-slate-900 mb-1">A real business you can reach</span>
+              Run by {COMPANY.legalName} in {COMPANY.address.city}, {COMPANY.address.state}. Support
+              replies within about {COMPANY.supportResponseDays} working days —{' '}
+              <a
+                href={`mailto:${COMPANY.supportEmail}`}
+                className="text-teal-800 font-medium underline-offset-2 hover:underline"
+              >
+                {COMPANY.supportEmail}
+              </a>
+              {' · '}
+              <a
+                href={`tel:${COMPANY.supportPhone.replace(/\s/g, '')}`}
+                className="text-teal-800 font-medium underline-offset-2 hover:underline"
+              >
+                {COMPANY.supportPhone}
+              </a>
+              .
+            </li>
+          </ul>
+        </div>
+      </section>
+
       {/* 4. Pricing — PLANS is the only source of prices and limits */}
       <section id="pricing" className="landing-section border-b border-slate-200/80">
         <div className="max-w-6xl mx-auto px-5">
@@ -229,8 +294,13 @@ export default function LandingPage() {
             Simple pricing
           </h2>
           <p className="text-sm text-slate-500 mb-10 max-w-lg">
-            Start on the free trial. Upgrade when monthly volume needs it. Limits are enforced in
-            the database — not just on the screen.
+            Start on the free trial — no card. Upgrade when monthly volume needs it. Limits are
+            enforced in the database, not just on the screen. Unused paid plans can be refunded
+            within {COMPANY.refundWindowDays} days (
+            <Link to="/refunds" className="text-teal-800 underline-offset-2 hover:underline">
+              Refund Policy
+            </Link>
+            ).
           </p>
 
           {PLANS.length === 0 ? (
@@ -297,10 +367,10 @@ export default function LandingPage() {
           <dl className="space-y-8">
             <div>
               <dt className="text-base font-semibold text-slate-900 mb-2">
-                How accurate is the scoring?
+                Does this predict who will buy?
               </dt>
               <dd className="text-sm sm:text-[15px] text-slate-600 leading-relaxed">
-                It improves your call order based on patterns in your own past leads — source,
+                No. It improves your call order based on patterns in your own past leads — source,
                 timing, recency, and what converted before. It is not a guarantee that someone will
                 buy, and it is not magic. The ranking gets more useful the more settled history you
                 upload (won / lost / no response). Think better prioritisation, not prophecy.
@@ -314,6 +384,19 @@ export default function LandingPage() {
                 A CSV or Excel export of your leads with names, phones, sources, dates, and
                 outcomes where you have them. Messy CRM exports are fine — you map the columns
                 once before scoring.
+              </dd>
+            </div>
+            <div>
+              <dt className="text-base font-semibold text-slate-900 mb-2">
+                What happens to my customer data?
+              </dt>
+              <dd className="text-sm sm:text-[15px] text-slate-600 leading-relaxed">
+                Your upload is used to score and show leads inside your workspace. We don&apos;t
+                sell lead lists or use your customers for unrelated marketing. Details are in the{' '}
+                <Link to="/privacy" className="text-teal-800 font-medium underline-offset-2 hover:underline">
+                  Privacy Policy
+                </Link>
+                . For a data request, email {COMPANY.supportEmail}.
               </dd>
             </div>
             <div>
@@ -331,7 +414,11 @@ export default function LandingPage() {
               <dd className="text-sm sm:text-[15px] text-slate-600 leading-relaxed">
                 Yes. {TRIAL_DAYS} days, {FREE_PLAN.lead_limit.toLocaleString('en-IN')} leads, no
                 card required. When the trial ends or you hit the limit, you upgrade to keep
-                uploading. Your existing scored leads stay readable.
+                uploading. Your existing scored leads stay readable. Paid plans follow our{' '}
+                <Link to="/refunds" className="text-teal-800 font-medium underline-offset-2 hover:underline">
+                  Refund Policy
+                </Link>{' '}
+                ({COMPANY.refundWindowDays} days on unused plans).
               </dd>
             </div>
           </dl>
@@ -353,16 +440,29 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-5 py-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-8">
           <div>
             <p className="font-display text-lg text-white tracking-tight">{COMPANY.tradeName}</p>
-            <p className="text-xs text-slate-500 mt-2 max-w-xs leading-relaxed">
+            <p className="text-xs text-slate-500 mt-2 max-w-sm leading-relaxed">
               A better call order, built from your own lead history — for small businesses in
               India.
             </p>
-            <a
-              href={`mailto:${COMPANY.supportEmail}`}
-              className="inline-block text-sm text-teal-300/90 hover:text-teal-200 mt-4 transition-colors"
-            >
-              {COMPANY.supportEmail}
-            </a>
+            <p className="text-[11px] text-slate-500 mt-4 leading-relaxed max-w-sm">
+              {COMPANY.legalName}
+              <br />
+              {formattedAddress()}
+            </p>
+            <div className="mt-4 flex flex-col gap-1.5 text-sm">
+              <a
+                href={`mailto:${COMPANY.supportEmail}`}
+                className="text-teal-300/90 hover:text-teal-200 transition-colors"
+              >
+                {COMPANY.supportEmail}
+              </a>
+              <a
+                href={`tel:${COMPANY.supportPhone.replace(/\s/g, '')}`}
+                className="text-teal-300/90 hover:text-teal-200 transition-colors"
+              >
+                {COMPANY.supportPhone}
+              </a>
+            </div>
           </div>
           <nav className="flex flex-wrap gap-x-5 gap-y-2" aria-label="Legal">
             {LEGAL_LINKS.map((link) => (
