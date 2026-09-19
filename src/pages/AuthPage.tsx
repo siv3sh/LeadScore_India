@@ -60,7 +60,7 @@ export default function AuthPage() {
           <p className="text-sm text-slate-500">Stop guessing who to call first</p>
         </div>
 
-        <div className="card p-8">
+        <div className="card p-5 sm:p-8">
           <div className="flex gap-1 p-1 bg-slate-100 rounded-lg mb-6">
             <button
               type="button"

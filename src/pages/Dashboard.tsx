@@ -498,14 +498,14 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 pt-[env(safe-area-inset-top)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-[1fr_minmax(0,24rem)_1fr] items-center gap-3 h-16">
-            <div className="flex items-center min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 py-2.5 sm:grid sm:h-16 sm:grid-cols-[1fr_minmax(0,24rem)_1fr] sm:items-center sm:gap-3 sm:py-0">
+            <div className="flex items-center min-w-0 order-1">
               <BrandLogo size={32} />
             </div>
 
-            <div className="relative w-full min-w-0 max-w-md justify-self-center">
+            <div className="relative w-full min-w-0 order-3 basis-full sm:order-2 sm:basis-auto sm:max-w-md sm:justify-self-center">
               <Search
                 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
                 aria-hidden="true"
@@ -530,15 +530,15 @@ export default function Dashboard() {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0 justify-self-end">
+            <div className="flex items-center gap-1 shrink-0 order-2 ml-auto sm:order-3 sm:ml-0 sm:justify-self-end">
               <MenuDropdown
                 ariaLabel="Upload file"
-                triggerClassName="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition"
+                triggerClassName="inline-flex items-center justify-center gap-1.5 h-9 w-9 sm:h-auto sm:w-auto sm:px-3 sm:py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition"
                 trigger={
                   <>
                     <UploadIcon className="w-4 h-4" />
-                    Upload file
-                    <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                    <span className="hidden sm:inline">Upload file</span>
+                    <ChevronDown className="hidden sm:inline w-3.5 h-3.5 opacity-80" />
                   </>
                 }
                 items={[
@@ -650,9 +650,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <div id="overview" className="mb-6 scroll-mt-20">
-          <h2 className="text-xl font-bold text-slate-900">Your list at a glance</h2>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
+        <div id="overview" className="mb-5 sm:mb-6 scroll-mt-20">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900">Your list at a glance</h2>
           <p className="text-sm text-slate-500 mt-0.5">
             Scores, sources, and what this batch could be worth — then the call list below.
           </p>
@@ -710,7 +710,7 @@ export default function Dashboard() {
               value={avgScore.toString()}
               hint="Out of 100"
             />
-            <TiltCard className="p-4">
+            <TiltCard className="p-4 col-span-2 lg:col-span-1">
               <p className="text-xs font-medium text-slate-500">Plan usage</p>
               <p className="text-2xl font-bold text-slate-900 mt-2 tracking-tight">
                 {Math.round(quotaShare * 100)}%
@@ -729,16 +729,18 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div id="charts" className="scroll-mt-20">
+        <div className="flex flex-col">
+        <div id="charts" className="order-3 md:order-2 scroll-mt-20">
           <LeadCharts leads={leads} />
         </div>
 
+        <div className="order-2 md:order-3">
         {loadingData ? (
-          <div className="card p-12 flex items-center justify-center">
+          <div className="card p-8 sm:p-12 flex items-center justify-center">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
           </div>
         ) : leads.length === 0 ? (
-          <div className="card p-12 text-center">
+          <div className="card p-8 sm:p-12 text-center">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-4">
               <Users className="w-6 h-6 text-slate-400" />
             </div>
@@ -785,14 +787,14 @@ export default function Dashboard() {
                   </button>
                   <MenuDropdown
                     ariaLabel="Language"
-                    triggerClassName="select-toolbar"
+                    triggerClassName="select-toolbar px-2 sm:px-3"
                     trigger={
                       <>
                         <Languages className="w-3.5 h-3.5 text-slate-500" />
-                        <span>
+                        <span className="hidden sm:inline">
                           {OUTREACH_LANG_OPTIONS.find((o) => o.id === outreachLang)?.label ?? 'EN'}
                         </span>
-                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                        <ChevronDown className="hidden sm:inline w-3.5 h-3.5 text-slate-400" />
                       </>
                     }
                     items={OUTREACH_LANG_OPTIONS.map((opt) => ({
@@ -821,8 +823,8 @@ export default function Dashboard() {
                 </p>
               )}
 
-              <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:flex-wrap">
-                <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <ToolbarFilter
                     ariaLabel="Filter by date"
                     value={dateFilter}
@@ -898,7 +900,7 @@ export default function Dashboard() {
                 <MenuDropdown
                   ariaLabel={uiLabel(outreachLang, 'waTemplate')}
                   align="left"
-                  triggerClassName="select-toolbar w-full sm:w-auto justify-between min-w-[9.5rem]"
+                  triggerClassName="select-toolbar w-auto justify-between min-w-[9.5rem] shrink-0"
                   trigger={
                     <>
                       <span className="truncate">
@@ -918,216 +920,174 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
-                    <th className="pl-4 pr-2 py-3 w-10">
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        onChange={(e) =>
-                          setSelectedIds(
-                            e.target.checked ? new Set(filteredLeads.map((l) => l.id)) : new Set()
-                          )
-                        }
-                        className="rounded border-slate-300"
-                        aria-label="Select all visible leads"
-                      />
-                    </th>
-                    <th className="px-2 py-3 font-medium min-w-[190px]">Lead</th>
-                    <th className="px-3 py-3 font-medium">Score</th>
-                    <th className="px-3 py-3 font-medium">Priority</th>
-                    <th className="px-3 py-3 font-medium">Source</th>
-                    <th className="px-3 py-3 font-medium text-right">Value</th>
-                    <th className="px-3 py-3 font-medium">Status</th>
-                    <th className="px-3 py-3 font-medium text-right pr-4">Outreach</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filteredLeads.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center">
-                        <p className="text-sm font-medium text-slate-800 mb-1">
-                          No leads match these filters
-                        </p>
-                        <p className="text-xs text-slate-500 mb-3">
-                          Try Today or Last 7 days, or tap reset.
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLeads.map((lead) => {
-                      const priority = lead.priority ?? 'low';
-                      const status = gridStatusAppearance(lead.status, lead.snoozed_until);
-                      const waHref = whatsappHref(
-                        lead.phone,
-                        whatsappTemplateMessage(waTemplate, outreachLang, lead.name)
-                      );
-                      const callHref = telLink(lead.phone);
-                      return (
-                        <tr key={lead.id} className="hover:bg-slate-50/60 transition">
-                          <td className="pl-4 pr-2 py-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(lead.id)}
-                              onChange={() => toggleLead(lead.id)}
-                              className="rounded border-slate-300"
-                              aria-label={`Select ${lead.name ?? 'lead'}`}
-                            />
-                          </td>
-                          <td className="px-2 py-3">
-                            <p className="font-semibold text-slate-800 text-[13px] truncate max-w-[220px] flex items-center gap-1.5">
-                              <span className="truncate">{lead.name || '—'}</span>
-                              {isSnoozed(lead.snoozed_until) && (
-                                <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                  <Moon className="w-3 h-3" />
-                                  {uiLabel(outreachLang, 'tomorrow')}
+            {filteredLeads.length === 0 ? (
+              <div className="px-4 py-12 text-center">
+                <p className="text-sm font-medium text-slate-800 mb-1">
+                  No leads match these filters
+                </p>
+                <p className="text-xs text-slate-500">
+                  Try Today or Last 7 days, or tap reset.
+                </p>
+              </div>
+            ) : (
+              <>
+                <ul className="md:hidden divide-y divide-slate-100">
+                  {filteredLeads.map((lead) => (
+                    <LeadMobileCard
+                      key={lead.id}
+                      lead={lead}
+                      selected={selectedIds.has(lead.id)}
+                      onToggle={() => toggleLead(lead.id)}
+                      customStatuses={customStatuses}
+                      waTemplate={waTemplate}
+                      outreachLang={outreachLang}
+                      onSetGridStatus={setGridStatus}
+                      onApplyCustom={applyCustomGridStatus}
+                      onAddCustom={addCustomGridStatus}
+                      onContact={markContacted}
+                    />
+                  ))}
+                </ul>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
+                        <th className="pl-4 pr-2 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={(e) =>
+                              setSelectedIds(
+                                e.target.checked ? new Set(filteredLeads.map((l) => l.id)) : new Set()
+                              )
+                            }
+                            className="rounded border-slate-300"
+                            aria-label="Select all visible leads"
+                          />
+                        </th>
+                        <th className="px-2 py-3 font-medium min-w-[190px]">Lead</th>
+                        <th className="px-3 py-3 font-medium">Score</th>
+                        <th className="px-3 py-3 font-medium">Priority</th>
+                        <th className="px-3 py-3 font-medium">Source</th>
+                        <th className="px-3 py-3 font-medium text-right">Value</th>
+                        <th className="px-3 py-3 font-medium">Status</th>
+                        <th className="px-3 py-3 font-medium text-right pr-4">Outreach</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {filteredLeads.map((lead) => {
+                        const priority = lead.priority ?? 'low';
+                        return (
+                          <tr key={lead.id} className="hover:bg-slate-50/60 transition">
+                            <td className="pl-4 pr-2 py-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(lead.id)}
+                                onChange={() => toggleLead(lead.id)}
+                                className="rounded border-slate-300"
+                                aria-label={`Select ${lead.name ?? 'lead'}`}
+                              />
+                            </td>
+                            <td className="px-2 py-3">
+                              <p className="font-semibold text-slate-800 text-[13px] truncate max-w-[220px] flex items-center gap-1.5">
+                                <span className="truncate">{lead.name || '—'}</span>
+                                {isSnoozed(lead.snoozed_until) && (
+                                  <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                    <Moon className="w-3 h-3" />
+                                    {uiLabel(outreachLang, 'tomorrow')}
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate max-w-[220px]">
+                                {lead.phone || 'No phone'}
+                                {lead.city ? ` · ${lead.city}` : ''}
+                              </p>
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-800 text-[13px] w-6">
+                                  {lead.score_0_100 ?? 0}
                                 </span>
-                              )}
-                            </p>
-                            <p className="text-[11px] text-slate-400 truncate max-w-[220px]">
-                              {lead.phone || 'No phone'}
-                              {lead.city ? ` · ${lead.city}` : ''}
-                            </p>
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-slate-800 text-[13px] w-6">
-                                {lead.score_0_100 ?? 0}
-                              </span>
-                              <div className="w-14 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full ${PRIORITY_STYLES[priority].dot}`}
-                                  style={{ width: `${lead.score_0_100 ?? 0}%` }}
-                                />
+                                <div className="w-14 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${PRIORITY_STYLES[priority].dot}`}
+                                    style={{ width: `${lead.score_0_100 ?? 0}%` }}
+                                  />
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3">
-                            <span
-                              className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium border ${PRIORITY_STYLES[priority].className}`}
-                            >
-                              <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
-                              {PRIORITY_STYLES[priority].label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
-                            {formatSource(lead.source)}
-                          </td>
-                          <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
-                            {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
-                          </td>
-                          <td className="px-3 py-3">
-                            <MenuDropdown
-                              ariaLabel={`Status for ${lead.name ?? 'lead'}`}
-                              align="left"
-                              triggerClassName={`inline-flex items-center gap-1.5 whitespace-nowrap pl-2 pr-1.5 py-0.5 rounded-full text-[11px] font-medium border ${status.className}`}
-                              trigger={
-                                <>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
-                                  {customStatuses.find(
-                                    (option) => option.slug === normalizeLeadStatus(lead.status),
-                                  )?.label ?? status.label}
-                                  <ChevronDown className="w-3 h-3 opacity-50" aria-hidden="true" />
-                                </>
-                              }
-                              items={[
-                                ...GRID_STATUS_OPTIONS.map((option) => ({
-                                  id: option.value,
-                                  label: option.label,
-                                  icon: <span className={`w-2 h-2 rounded-full ${option.dot}`} />,
-                                  active: isGridStatusActive(
-                                    option.value,
-                                    lead.status,
-                                    lead.snoozed_until,
-                                  ),
-                                  tone:
-                                    option.value === 'won'
-                                      ? ('success' as const)
-                                      : option.value === 'lost'
-                                        ? ('danger' as const)
-                                        : undefined,
-                                  onSelect: () => setGridStatus(lead.id, option.value),
-                                })),
-                                ...customStatuses.map((option) => ({
-                                  id: `custom-${option.slug}`,
-                                  label: option.label,
-                                  icon: <span className="w-2 h-2 rounded-full bg-teal-500" />,
-                                  active:
-                                    !isSnoozedOpen(lead.status, lead.snoozed_until) &&
-                                    normalizeLeadStatus(lead.status) === option.slug,
-                                  onSelect: () => applyCustomGridStatus(lead.id, option.slug),
-                                })),
-                              ]}
-                              footer={(close) => (
-                                <AddCustomStatusField
-                                  onAdd={(raw) => {
-                                    const error = addCustomGridStatus(lead.id, raw);
-                                    if (!error) close();
-                                    return error;
-                                  }}
-                                />
-                              )}
-                            />
-                          </td>
-                          <td className="px-3 py-3 pr-4">
-                            <div className="flex items-center justify-end gap-0.5">
-                              {waHref ? (
-                                <a
-                                  href={waHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => markContacted(lead.id)}
-                                  className="p-2 rounded-lg text-green-700 hover:bg-green-50 transition"
-                                  title={uiLabel(outreachLang, 'whatsapp')}
-                                  aria-label={uiLabel(outreachLang, 'whatsapp')}
-                                >
-                                  <MessageCircle className="w-4 h-4" />
-                                </a>
-                              ) : (
-                                <span
-                                  className="p-2 text-slate-300"
-                                  title="No phone number"
-                                  aria-hidden="true"
-                                >
-                                  <MessageCircle className="w-4 h-4" />
-                                </span>
-                              )}
-                              {callHref ? (
-                                <a
-                                  href={callHref}
-                                  onClick={() => markContacted(lead.id)}
-                                  className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
-                                  title={uiLabel(outreachLang, 'call')}
-                                  aria-label={uiLabel(outreachLang, 'call')}
-                                >
-                                  <Phone className="w-4 h-4" />
-                                </a>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            </td>
+                            <td className="px-3 py-3">
+                              <span
+                                className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium border ${PRIORITY_STYLES[priority].className}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
+                                {PRIORITY_STYLES[priority].label}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
+                              {formatSource(lead.source)}
+                            </td>
+                            <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
+                              {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
+                            </td>
+                            <td className="px-3 py-3">
+                              <LeadStatusMenu
+                                lead={lead}
+                                customStatuses={customStatuses}
+                                onSetGridStatus={setGridStatus}
+                                onApplyCustom={applyCustomGridStatus}
+                                onAddCustom={addCustomGridStatus}
+                              />
+                            </td>
+                            <td className="px-3 py-3 pr-4">
+                              <LeadOutreachActions
+                                lead={lead}
+                                waTemplate={waTemplate}
+                                outreachLang={outreachLang}
+                                onContact={markContacted}
+                                variant="icons"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
 
-            <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100">
-              {`Showing ${filteredLeads.length} of ${leads.length} leads`}
-              {selectedVisible > 0 && ` · ${selectedVisible} selected for export`}
+            <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100 flex items-center gap-3">
+              <label className="md:hidden inline-flex items-center gap-2 text-slate-600 shrink-0">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={(e) =>
+                    setSelectedIds(
+                      e.target.checked ? new Set(filteredLeads.map((l) => l.id)) : new Set()
+                    )
+                  }
+                  className="rounded border-slate-300"
+                  aria-label="Select all visible leads"
+                />
+                All
+              </label>
+              <span className="min-w-0">
+                {`Showing ${filteredLeads.length} of ${leads.length} leads`}
+                {selectedVisible > 0 && ` · ${selectedVisible} selected for export`}
+              </span>
             </div>
           </div>
         )}
+        </div>
+        </div>
       </div>
 
       {copyNote && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 max-w-sm rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-800 shadow-lg shadow-slate-900/10"
+          className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-5 sm:bottom-5 z-50 flex items-center gap-2.5 max-w-sm rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-800 shadow-lg shadow-slate-900/10"
         >
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span className="font-medium">{copyNote}</span>
@@ -1322,16 +1282,16 @@ function UploadModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/40 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10">
           <h2 className="text-lg font-bold text-slate-900">Upload Lead Data</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-5 sm:p-6">
           <div className="flex items-center gap-2 mb-6 text-sm">
             <StepIndicator active={step === 'upload'} done={step !== 'upload'} label="Upload" />
             <ChevronRight className="w-4 h-4 text-slate-300" />
@@ -1350,7 +1310,7 @@ function UploadModal({
           {step === 'upload' && (
             <div>
               <div
-                className={`border-2 border-dashed rounded-xl p-10 text-center transition ${readingFile
+                className={`border-2 border-dashed rounded-xl p-6 sm:p-10 text-center transition ${readingFile
                   ? 'border-slate-200 cursor-wait'
                   : 'border-slate-300 hover:border-blue-500 cursor-pointer'
                   }`}
@@ -1493,7 +1453,7 @@ function UploadModal({
                 <MappingField label="Lead ID (optional)" value={mapping.lead_id ?? ''} headers={headers} onChange={(v) => setMapping({ ...mapping, lead_id: v || undefined })} />
                 <MappingField label="Last Contacted (optional)" value={mapping.last_contacted_at ?? ''} headers={headers} onChange={(v) => setMapping({ ...mapping, last_contacted_at: v || undefined })} />
               </div>
-              <div className="flex gap-3 mt-6">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
                 <button onClick={() => setStep('upload')} className="btn-secondary">
                   Back
                 </button>
@@ -1665,6 +1625,255 @@ function AddCustomStatusField({
   );
 }
 
+function LeadStatusMenu({
+  lead,
+  customStatuses,
+  onSetGridStatus,
+  onApplyCustom,
+  onAddCustom,
+}: {
+  lead: Lead;
+  customStatuses: CustomStatus[];
+  onSetGridStatus: (leadId: string, value: GridStatusValue) => void;
+  onApplyCustom: (leadId: string, slug: string) => void;
+  onAddCustom: (leadId: string, raw: string) => string | null;
+}) {
+  const status = gridStatusAppearance(lead.status, lead.snoozed_until);
+  return (
+    <MenuDropdown
+      ariaLabel={`Status for ${lead.name ?? 'lead'}`}
+      align="left"
+      triggerClassName={`inline-flex items-center gap-1.5 whitespace-nowrap pl-2 pr-1.5 py-0.5 rounded-full text-[11px] font-medium border ${status.className}`}
+      trigger={
+        <>
+          <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+          {customStatuses.find((option) => option.slug === normalizeLeadStatus(lead.status))?.label ??
+            status.label}
+          <ChevronDown className="w-3 h-3 opacity-50" aria-hidden="true" />
+        </>
+      }
+      items={[
+        ...GRID_STATUS_OPTIONS.map((option) => ({
+          id: option.value,
+          label: option.label,
+          icon: <span className={`w-2 h-2 rounded-full ${option.dot}`} />,
+          active: isGridStatusActive(option.value, lead.status, lead.snoozed_until),
+          tone:
+            option.value === 'won'
+              ? ('success' as const)
+              : option.value === 'lost'
+                ? ('danger' as const)
+                : undefined,
+          onSelect: () => onSetGridStatus(lead.id, option.value),
+        })),
+        ...customStatuses.map((option) => ({
+          id: `custom-${option.slug}`,
+          label: option.label,
+          icon: <span className="w-2 h-2 rounded-full bg-teal-500" />,
+          active:
+            !isSnoozedOpen(lead.status, lead.snoozed_until) &&
+            normalizeLeadStatus(lead.status) === option.slug,
+          onSelect: () => onApplyCustom(lead.id, option.slug),
+        })),
+      ]}
+      footer={(close) => (
+        <AddCustomStatusField
+          onAdd={(raw) => {
+            const error = onAddCustom(lead.id, raw);
+            if (!error) close();
+            return error;
+          }}
+        />
+      )}
+    />
+  );
+}
+
+function LeadOutreachActions({
+  lead,
+  waTemplate,
+  outreachLang,
+  onContact,
+  variant,
+}: {
+  lead: Lead;
+  waTemplate: WaTemplateId;
+  outreachLang: OutreachLang;
+  onContact: (leadId: string) => void;
+  variant: 'icons' | 'buttons';
+}) {
+  const waHref = whatsappHref(
+    lead.phone,
+    whatsappTemplateMessage(waTemplate, outreachLang, lead.name)
+  );
+  const callHref = telLink(lead.phone);
+  const waLabel = uiLabel(outreachLang, 'whatsapp');
+  const callLabel = uiLabel(outreachLang, 'call');
+
+  if (variant === 'buttons') {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        {waHref ? (
+          <a
+            href={waHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => onContact(lead.id)}
+            className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-green-50 text-green-800 text-sm font-medium border border-green-200"
+          >
+            <MessageCircle className="w-4 h-4" />
+            {waLabel}
+          </a>
+        ) : (
+          <span className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-slate-50 text-slate-300 text-sm font-medium border border-slate-100">
+            <MessageCircle className="w-4 h-4" />
+            {waLabel}
+          </span>
+        )}
+        {callHref ? (
+          <a
+            href={callHref}
+            onClick={() => onContact(lead.id)}
+            className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-slate-100 text-slate-800 text-sm font-medium border border-slate-200"
+          >
+            <Phone className="w-4 h-4" />
+            {callLabel}
+          </a>
+        ) : (
+          <span className="inline-flex items-center justify-center gap-1.5 h-10 rounded-lg bg-slate-50 text-slate-300 text-sm font-medium border border-slate-100">
+            <Phone className="w-4 h-4" />
+            {callLabel}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-0.5">
+      {waHref ? (
+        <a
+          href={waHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => onContact(lead.id)}
+          className="p-2 rounded-lg text-green-700 hover:bg-green-50 transition"
+          title={waLabel}
+          aria-label={waLabel}
+        >
+          <MessageCircle className="w-4 h-4" />
+        </a>
+      ) : (
+        <span className="p-2 text-slate-300" title="No phone number" aria-hidden="true">
+          <MessageCircle className="w-4 h-4" />
+        </span>
+      )}
+      {callHref ? (
+        <a
+          href={callHref}
+          onClick={() => onContact(lead.id)}
+          className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
+          title={callLabel}
+          aria-label={callLabel}
+        >
+          <Phone className="w-4 h-4" />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+function LeadMobileCard({
+  lead,
+  selected,
+  onToggle,
+  customStatuses,
+  waTemplate,
+  outreachLang,
+  onSetGridStatus,
+  onApplyCustom,
+  onAddCustom,
+  onContact,
+}: {
+  lead: Lead;
+  selected: boolean;
+  onToggle: () => void;
+  customStatuses: CustomStatus[];
+  waTemplate: WaTemplateId;
+  outreachLang: OutreachLang;
+  onSetGridStatus: (leadId: string, value: GridStatusValue) => void;
+  onApplyCustom: (leadId: string, slug: string) => void;
+  onAddCustom: (leadId: string, raw: string) => string | null;
+  onContact: (leadId: string) => void;
+}) {
+  const priority = lead.priority ?? 'low';
+  return (
+    <li className="px-4 py-3.5">
+      <div className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          className="mt-1 rounded border-slate-300"
+          aria-label={`Select ${lead.name ?? 'lead'}`}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
+                <span className="truncate">{lead.name || '—'}</span>
+                {isSnoozed(lead.snoozed_until) && (
+                  <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                    <Moon className="w-3 h-3" />
+                    {uiLabel(outreachLang, 'tomorrow')}
+                  </span>
+                )}
+              </p>
+              <p className="text-[12px] text-slate-500 truncate mt-0.5">
+                {lead.phone || 'No phone'}
+                {lead.city ? ` · ${lead.city}` : ''}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-semibold tabular-nums text-slate-900">
+                {lead.score_0_100 ?? 0}
+              </p>
+              <span
+                className={`mt-1 inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${PRIORITY_STYLES[priority].className}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
+                {PRIORITY_STYLES[priority].label}
+              </span>
+            </div>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-500 truncate">
+            {formatSource(lead.source)}
+            {lead.order_value > 0 ? ` · ${formatINR(lead.order_value)}` : ''}
+          </p>
+          <div className="mt-2.5">
+            <LeadStatusMenu
+              lead={lead}
+              customStatuses={customStatuses}
+              onSetGridStatus={onSetGridStatus}
+              onApplyCustom={onApplyCustom}
+              onAddCustom={onAddCustom}
+            />
+          </div>
+          <div className="mt-2.5">
+            <LeadOutreachActions
+              lead={lead}
+              waTemplate={waTemplate}
+              outreachLang={outreachLang}
+              onContact={onContact}
+              variant="buttons"
+            />
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
 function ScoreFirstToggle({
   on,
   onChange,
@@ -1691,9 +1900,12 @@ function ScoreFirstToggle({
         />
       </span>
       <span className="text-xs text-slate-600 min-w-0">
-        {on
-          ? 'Highest scores first — call or WhatsApp these today.'
-          : 'Newest first — by the day they arrived.'}
+        <span className="sm:hidden">{on ? 'Highest scores first' : 'Newest first'}</span>
+        <span className="hidden sm:inline">
+          {on
+            ? 'Highest scores first — call or WhatsApp these today.'
+            : 'Newest first — by the day they arrived.'}
+        </span>
       </span>
     </button>
   );
@@ -1722,7 +1934,7 @@ function ToolbarFilter({
     <MenuDropdown
       ariaLabel={ariaLabel}
       align="left"
-      triggerClassName="select-toolbar w-full sm:w-auto justify-between min-w-[9.5rem]"
+      triggerClassName="select-toolbar w-auto justify-between min-w-[9.5rem] shrink-0"
       trigger={
         <>
           {current?.icon}
@@ -1761,8 +1973,8 @@ function MappingField({
   ];
   const current = options.find((option) => option.value === value);
   return (
-    <div className="flex items-center gap-3">
-      <label className="text-sm font-medium text-slate-600 w-40 shrink-0">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+      <label className="text-sm font-medium text-slate-600 sm:w-40 shrink-0">
         {label}
         {required && <span className="text-red-500">*</span>}
       </label>

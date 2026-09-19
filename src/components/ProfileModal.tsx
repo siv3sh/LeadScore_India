@@ -191,9 +191,9 @@ export default function ProfileModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between px-7 pt-6 pb-2">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+        <div className="flex items-start justify-between px-5 sm:px-7 pt-6 pb-2">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Your profile</h2>
             <p className="text-sm text-slate-500 mt-1">
@@ -210,13 +210,13 @@ export default function ProfileModal({
         </div>
 
         {profile?.is_admin && (
-          <div className="mx-7 mt-3 flex items-center gap-2 text-xs font-medium text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+          <div className="mx-5 sm:mx-7 mt-3 flex items-center gap-2 text-xs font-medium text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
             <Shield className="w-3.5 h-3.5 shrink-0" />
             <span>Admin — you can view and manage every workspace.</span>
           </div>
         )}
 
-        <div className="px-7 pt-5 pb-2 flex items-center gap-4">
+        <div className="px-5 sm:px-7 pt-5 pb-2 flex items-center gap-4">
           <input
             ref={fileRef}
             type="file"
@@ -282,12 +282,12 @@ export default function ProfileModal({
         </div>
 
         {avatarError && (
-          <p className="mx-7 mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          <p className="mx-5 sm:mx-7 mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {avatarError}
           </p>
         )}
 
-        <div className="px-7 pt-4">
+        <div className="px-5 sm:px-7 pt-4">
           <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
             <button
               type="button"
@@ -310,7 +310,7 @@ export default function ProfileModal({
           </div>
         </div>
 
-        <div className="px-7 py-5">{renderSection(section)}</div>
+        <div className="px-5 sm:px-7 py-5">{renderSection(section)}</div>
       </div>
     </div>
   );

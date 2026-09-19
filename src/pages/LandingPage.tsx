@@ -91,7 +91,7 @@ function HeroLeadMockup() {
             </span>
             Today&apos;s call list
           </span>
-          <span className="text-[10px] sm:text-[11px] text-blue-200/60">
+          <span className="hidden sm:inline text-[10px] sm:text-[11px] text-blue-200/60">
             Better call order · demo data
           </span>
         </div>
@@ -194,7 +194,7 @@ export default function LandingPage() {
           <a href="#top" className="shrink-0" aria-label="LeadScore home">
             <BrandLogo variant="onDark" size={32} />
           </a>
-          <nav className="flex items-center gap-4 sm:gap-6" aria-label="Primary">
+          <nav className="flex items-center gap-3 sm:gap-6 shrink-0" aria-label="Primary">
             <a
               href="#top"
               className="hidden sm:inline text-sm font-medium text-white/90 hover:text-white transition-colors"
