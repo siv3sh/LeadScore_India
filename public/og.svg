@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="LeadScore">
+  <rect width="1200" height="630" fill="#F8FAFC"/>
+  <rect x="0" y="0" width="1200" height="8" fill="#2563EB"/>
+  <!-- Soft brand wash -->
+  <circle cx="980" cy="120" r="260" fill="#E8F1FF"/>
+  <circle cx="180" cy="540" r="200" fill="#E8F1FF" fill-opacity="0.7"/>
+
+  <!-- Icon tile -->
+  <rect x="80" y="180" width="88" height="88" rx="20" fill="#2563EB"/>
+  <rect x="98" y="228" width="12" height="24" rx="2" fill="#ffffff"/>
+  <rect x="118" y="214" width="12" height="38" rx="2" fill="#ffffff"/>
+  <rect x="138" y="200" width="12" height="52" rx="2" fill="#ffffff"/>
+  <path d="M96 250c14-4 30-16 44-34" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <path d="M128 210l14-4-2 14z" fill="#ffffff"/>
+
+  <!-- Wordmark -->
+  <text x="192" y="242" font-family="Helvetica, Arial, sans-serif" font-size="64" font-weight="700" fill="#0F172A">Lead</text>
+  <text x="350" y="242" font-family="Helvetica, Arial, sans-serif" font-size="64" font-weight="700" fill="#2563EB">Score</text>
+
+  <text x="80" y="340" font-family="Helvetica, Arial, sans-serif" font-size="36" font-weight="500" fill="#0F172A">Stop guessing who to call first</text>
+  <text x="80" y="392" font-family="Helvetica, Arial, sans-serif" font-size="26" fill="#64748B">AI lead prioritization for Indian businesses</text>
+  <text x="80" y="520" font-family="Helvetica, Arial, sans-serif" font-size="22" fill="#2563EB">leadscore.sivesh-pb.com</text>
+</svg>

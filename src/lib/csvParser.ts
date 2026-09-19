@@ -79,12 +79,27 @@ function normalizeTimestamp(value: string): string | null {
   return parsed.toISOString();
 }
 
+function parseDelimitedLine(line: string, delimiter: ',' | '\t'): string[] {
+  if (delimiter === '\t') {
+    return line.split('\t').map((s) => s.trim());
+  }
+  return parseCSVLine(line);
+}
+
+function detectDelimiter(headerLine: string): ',' | '\t' {
+  const tabs = headerLine.split('\t').length;
+  const commas = parseCSVLine(headerLine).length;
+  // Google Sheets paste is tab-separated; prefer tabs when they yield more columns.
+  return tabs > commas ? '\t' : ',';
+}
+
 export function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   const lines = text.trim().split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) throw new Error('CSV file is empty');
 
-  const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().trim());
-  const rows = lines.slice(1).map((line) => parseCSVLine(line));
+  const delimiter = detectDelimiter(lines[0]);
+  const headers = parseDelimitedLine(lines[0], delimiter).map((h) => h.toLowerCase().trim());
+  const rows = lines.slice(1).map((line) => parseDelimitedLine(line, delimiter));
   return { headers, rows };
 }
 
@@ -215,8 +230,8 @@ export interface LeadValidation {
 
 /**
  * Catches mappings that produce a model with nothing to learn from. The label is
- * derived solely from `status === 'won'`, so a file with no won rows trains on an
- * all-zero target and scores every lead identically instead of failing.
+ * derived from converted status (`won` in CSV), so a file with no converted rows
+ * trains on an all-zero target and scores every lead identically instead of failing.
  */
 export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
   const warnings: string[] = [];
@@ -224,8 +239,9 @@ export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
   if (!leads.some((l) => l.status === 'won')) {
     return {
       error:
-        "No leads have status 'won', so there is nothing for the model to learn from. " +
-        'Map your outcome column to "status" using won / lost / no_response values, then upload again.',
+        'No leads are marked as converted, so there is nothing for the model to learn from. ' +
+        'Map your outcome column using converted / not converted / no response ' +
+        '(CSV: won / lost / no_response), then upload again.',
       warnings,
     };
   }
@@ -258,8 +274,8 @@ export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
 
   if (!leads.some((l) => RESOLVED_STATUSES.includes(l.status) && l.status !== 'won')) {
     warnings.push(
-      'Every lead with a settled outcome is marked won, so the model has no examples of a lead ' +
-        'that did not convert and cannot tell the two apart. Include lost / no_response leads too.'
+      'Every lead with a settled outcome is marked converted, so the model has no examples of a lead ' +
+        'that did not convert and cannot tell the two apart. Include not converted / no response leads too.'
     );
   }
 

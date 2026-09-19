@@ -76,7 +76,7 @@ describe('processCSVUpload rejects before touching the database', () => {
   // The upload row is what getMonthlyLeadCount and the enforce_monthly_lead_limit
   // trigger both count against the plan. Creating one for a file that cannot be
   // scored charges the customer's quota for nothing, which is the bug this guards.
-  it('never writes anything when no lead has status won', async () => {
+  it('never writes anything when no lead is marked converted', async () => {
     const calls = installSupabaseMock();
 
     await expect(
@@ -86,7 +86,7 @@ describe('processCSVUpload rejects before touching the database', () => {
         csvWithStatuses(['lost', 'lost', 'no_response', 'new']),
         MAPPING
       )
-    ).rejects.toThrow("No leads have status 'won'");
+    ).rejects.toThrow('No leads are marked as converted');
 
     expect(fromMock).not.toHaveBeenCalled();
     expect(calls.uploadsInsert).not.toHaveBeenCalled();

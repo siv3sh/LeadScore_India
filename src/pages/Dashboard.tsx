@@ -1,5 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import {
   Upload as UploadIcon,
   Download,
@@ -8,7 +7,6 @@ import {
   Users,
   Target,
   Gauge,
-  Activity,
   FileText,
   X,
   Loader2,
@@ -19,8 +17,14 @@ import {
   MessageCircle,
   Phone,
   LogOut,
-  CreditCard,
   UserCircle,
+  Moon,
+  Link2,
+  RefreshCw,
+  ClipboardCopy,
+  ChevronDown,
+  Languages,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
@@ -31,6 +35,8 @@ import {
   exportLeadsToCSV,
   downloadCSV,
   getMonthlyLeadCount,
+  updateLeadOutreach,
+  syncWorkspaceGoogleSheet,
   type UploadResult,
 } from '@/lib/api';
 import {
@@ -46,40 +52,92 @@ import {
   type ColumnMapping,
 } from '@/lib/csvParser';
 import { readUploadAsCsv } from '@/lib/spreadsheet';
-import { LEGAL_LINKS } from '@/lib/company';
 import {
   formatINR,
   formatSource,
   formatStatus,
+  GRID_STATUS_OPTIONS,
+  gridStatusAppearance,
+  isGridStatusActive,
+  isSettledOutreachStatus,
+  isSnoozed,
+  isSnoozedOpen,
+  DATE_FILTER_PRESETS,
+  dateFilterLabel,
+  isCalendarDayFilter,
+  leadMatchesDateFilter,
+  localDateKey,
+  normalizeLeadStatus,
   PRIORITY_STYLES,
+  snoozeUntilTomorrowMorning,
   telLink,
-  whatsappNumber,
+  whatsappHref,
+  type GridStatusValue,
 } from '@/lib/display';
+import {
+  buildSheetOutcomeTsv,
+  copyTextToClipboard,
+  leadsWithOutreachLogged,
+  loadOutreachLang,
+  OUTREACH_LANG_OPTIONS,
+  saveOutreachLang,
+  uiLabel,
+  WA_TEMPLATE_OPTIONS,
+  whatsappTemplateMessage,
+  type OutreachLang,
+  type WaTemplateId,
+} from '@/lib/outreach';
+import {
+  DEFAULT_LIST_FILTERS,
+  filtersAreDefault,
+  loadCustomStatuses,
+  loadListFilters,
+  parseCustomStatusLabel,
+  rememberCustomStatus,
+  saveListFilters,
+  CUSTOM_STATUS_MAX_LEN,
+  type CustomStatus,
+} from '@/lib/userPrefs';
+import { shouldAutoSyncSheet } from '@/lib/googleSheet';
 import { formatTrialEnd, getTrialState } from '@/lib/trial';
 import LeadCharts from '@/components/LeadCharts';
-import PricingModal from '@/components/PricingModal';
+import BrandLogo from '@/components/BrandLogo';
+import MenuDropdown from '@/components/MenuDropdown';
+import DayPicker from '@/components/DayPicker';
 import ProfileModal from '@/components/ProfileModal';
+import SheetSyncModal from '@/components/SheetSyncModal';
+import TiltCard from '@/components/TiltCard';
 import { getPlan, type Priority } from '@/types';
 import type { Upload, Lead } from '@/types';
 
 export default function Dashboard() {
-  const { workspace, subscription, signOut, refreshWorkspace } = useAuth();
+  const { workspace, subscription, signOut, refreshWorkspace, user, profile } = useAuth();
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedUpload, setSelectedUpload] = useState<Upload | null>(null);
   const [monthlyCount, setMonthlyCount] = useState(0);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showPricing, setShowPricing] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [profileSection, setProfileSection] = useState<'account' | 'plans'>('account');
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>('all');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState<'all' | Priority>(DEFAULT_LIST_FILTERS.priority);
+  const [sourceFilter, setSourceFilter] = useState(DEFAULT_LIST_FILTERS.source);
+  const [statusFilter, setStatusFilter] = useState(DEFAULT_LIST_FILTERS.status);
+  const [scoreFirst, setScoreFirst] = useState(DEFAULT_LIST_FILTERS.scoreFirst);
+  const [dateFilter, setDateFilter] = useState(DEFAULT_LIST_FILTERS.date);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [customStatuses, setCustomStatuses] = useState<CustomStatus[]>([]);
+  const [filtersHydrated, setFiltersHydrated] = useState(false);
+  const [showSheetSync, setShowSheetSync] = useState(false);
+  const [sheetSyncing, setSheetSyncing] = useState(false);
+  const [autoSyncAttempted, setAutoSyncAttempted] = useState(false);
+  const [outreachLang, setOutreachLang] = useState<OutreachLang>(() => loadOutreachLang());
+  const [waTemplate, setWaTemplate] = useState<WaTemplateId>('follow_up');
+  const [copyNote, setCopyNote] = useState<string | null>(null);
   const plan = getPlan(subscription?.plan ?? 'free');
   const trial = getTrialState(subscription);
 
@@ -108,6 +166,85 @@ export default function Dashboard() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) {
+      setFiltersHydrated(false);
+      return;
+    }
+    const saved = loadListFilters(userId);
+    setPriorityFilter(saved.priority);
+    setSourceFilter(saved.source);
+    setStatusFilter(saved.status);
+    setScoreFirst(saved.scoreFirst);
+    setDateFilter(saved.date);
+    setCustomStatuses(loadCustomStatuses(userId));
+    setFiltersHydrated(true);
+  }, [user?.id]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId || !filtersHydrated) return;
+    saveListFilters(userId, {
+      priority: priorityFilter,
+      source: sourceFilter,
+      status: statusFilter,
+      scoreFirst,
+      date: dateFilter,
+    });
+  }, [user?.id, filtersHydrated, priorityFilter, sourceFilter, statusFilter, scoreFirst, dateFilter]);
+
+  function resetFilters() {
+    setPriorityFilter(DEFAULT_LIST_FILTERS.priority);
+    setSourceFilter(DEFAULT_LIST_FILTERS.source);
+    setStatusFilter(DEFAULT_LIST_FILTERS.status);
+    setScoreFirst(DEFAULT_LIST_FILTERS.scoreFirst);
+    setDateFilter(DEFAULT_LIST_FILTERS.date);
+  }
+
+  // Auto-pull a connected Google Sheet when the dashboard opens and data is stale.
+  useEffect(() => {
+    if (!workspace || autoSyncAttempted || loadingData) return;
+    const mapping = workspace.sheet_mapping as ColumnMapping | null;
+    if (
+      !shouldAutoSyncSheet({
+        enabled: workspace.sheet_sync_enabled,
+        lastSyncedAt: workspace.sheet_last_synced_at,
+        hasMapping: Boolean(mapping?.name && mapping?.phone),
+        hasUrl: Boolean(workspace.sheet_url),
+      })
+    ) {
+      setAutoSyncAttempted(true);
+      return;
+    }
+
+    setAutoSyncAttempted(true);
+    setSheetSyncing(true);
+    void syncWorkspaceGoogleSheet(
+      workspace.id,
+      workspace.sheet_url!,
+      mapping!,
+      plan.lead_limit
+    )
+      .then(async () => {
+        await refreshWorkspace();
+        await loadData();
+      })
+      .catch((err) => {
+        setActionError(
+          err instanceof Error ? err.message : 'Automatic Sheet sync failed — try Sync now.'
+        );
+      })
+      .finally(() => setSheetSyncing(false));
+  }, [
+    workspace,
+    autoSyncAttempted,
+    loadingData,
+    plan.lead_limit,
+    loadData,
+    refreshWorkspace,
+  ]);
 
   async function handleSelectUpload(upload: Upload) {
     if (!workspace) return;
@@ -141,10 +278,19 @@ export default function Dashboard() {
 
   function getFilteredLeads(): Lead[] {
     const query = searchQuery.toLowerCase().trim();
-    return leads.filter((l) => {
+    const todayKey = localDateKey(new Date());
+    const rows = leads.filter((l) => {
       if (priorityFilter !== 'all' && l.priority !== priorityFilter) return false;
       if (sourceFilter !== 'all' && l.source !== sourceFilter) return false;
-      if (statusFilter !== 'all' && l.status !== statusFilter) return false;
+      if (statusFilter !== 'all') {
+        const snoozedOpen = isSnoozedOpen(l.status, l.snoozed_until);
+        if (statusFilter === 'tomorrow') {
+          if (!snoozedOpen) return false;
+        } else if (snoozedOpen || normalizeLeadStatus(l.status) !== statusFilter) {
+          return false;
+        }
+      }
+      if (!leadMatchesDateFilter(l, dateFilter, todayKey)) return false;
       if (query) {
         const haystack = [l.name, l.phone, l.city, l.lead_id]
           .filter(Boolean)
@@ -154,10 +300,145 @@ export default function Dashboard() {
       }
       return true;
     });
+
+    return rows.slice().sort((a, b) => {
+      if (scoreFirst) {
+        return (b.score_0_100 ?? 0) - (a.score_0_100 ?? 0);
+      }
+      const aTime = a.created_at_lead || a.created_at;
+      const bTime = b.created_at_lead || b.created_at;
+      return bTime.localeCompare(aTime);
+    });
+  }
+
+  async function applyLeadPatch(
+    leadId: string,
+    patch: {
+      status?: string | null;
+      last_contacted_at?: string | null;
+      snoozed_until?: string | null;
+    }
+  ) {
+    setActionError(null);
+    const previous = leads;
+    setLeads((curr) => curr.map((l) => (l.id === leadId ? { ...l, ...patch } : l)));
+    try {
+      await updateLeadOutreach(leadId, patch);
+    } catch (err) {
+      setLeads(previous);
+      setActionError(err instanceof Error ? err.message : 'Could not update that lead');
+    }
+  }
+
+  function markContacted(leadId: string) {
+    void applyLeadPatch(leadId, {
+      status: 'contacted',
+      last_contacted_at: new Date().toISOString(),
+      snoozed_until: null,
+    });
+  }
+
+  function markNoAnswer(leadId: string) {
+    void applyLeadPatch(leadId, {
+      status: 'no_response',
+      last_contacted_at: new Date().toISOString(),
+      snoozed_until: null,
+    });
+  }
+
+  function markConverted(leadId: string) {
+    void applyLeadPatch(leadId, {
+      status: 'won',
+      last_contacted_at: new Date().toISOString(),
+      snoozed_until: null,
+    });
+  }
+
+  function markNotConverted(leadId: string) {
+    void applyLeadPatch(leadId, {
+      status: 'lost',
+      last_contacted_at: new Date().toISOString(),
+      snoozed_until: null,
+    });
+  }
+
+  function setGridStatus(leadId: string, value: GridStatusValue) {
+    switch (value) {
+      case 'new':
+      case 'follow_up':
+        void applyLeadPatch(leadId, { status: value, snoozed_until: null });
+        return;
+      case 'contacted':
+        markContacted(leadId);
+        return;
+      case 'no_response':
+        markNoAnswer(leadId);
+        return;
+      case 'tomorrow':
+        snoozeLead(leadId);
+        return;
+      case 'won':
+        markConverted(leadId);
+        return;
+      case 'lost':
+        markNotConverted(leadId);
+        return;
+      default: {
+        const _never: never = value;
+        return _never;
+      }
+    }
+  }
+
+  function applyCustomGridStatus(leadId: string, slug: string) {
+    void applyLeadPatch(leadId, { status: slug, snoozed_until: null });
+  }
+
+  function addCustomGridStatus(leadId: string, raw: string): string | null {
+    if (!user?.id) return 'Sign in to save a custom status.';
+    const parsed = parseCustomStatusLabel(raw);
+    if ('error' in parsed) return parsed.error;
+    const remembered = rememberCustomStatus(user.id, parsed);
+    if ('error' in remembered) return remembered.error;
+    setCustomStatuses(remembered);
+    applyCustomGridStatus(leadId, parsed.slug);
+    return null;
+  }
+
+  function snoozeLead(leadId: string) {
+    const lead = leads.find((l) => l.id === leadId);
+    void applyLeadPatch(leadId, {
+      snoozed_until: snoozeUntilTomorrowMorning(),
+      ...(lead && isSettledOutreachStatus(lead.status) ? { status: 'new' } : {}),
+    });
+  }
+
+  function setLang(lang: OutreachLang) {
+    setOutreachLang(lang);
+    saveOutreachLang(lang);
+  }
+
+  async function copySheetOutcomes() {
+    setCopyNote(null);
+    const rows = leadsWithOutreachLogged(leads);
+    if (rows.length === 0) {
+      setActionError(
+        'Log Call / No answer / Converted on some leads first, then copy for your Sheet.'
+      );
+      return;
+    }
+    try {
+      await copyTextToClipboard(buildSheetOutcomeTsv(rows));
+      setActionError(null);
+      setCopyNote(uiLabel(outreachLang, 'copied'));
+      window.setTimeout(() => setCopyNote(null), 3500);
+    } catch {
+      setActionError('Could not copy. Try again or use Export CSV.');
+    }
   }
 
   function handleDownloadTemplate() {
-    downloadCSV(generateTemplateCSV(), 'leadai_template.csv');
+    downloadCSV(generateTemplateCSV(), 'leadscore_template.csv');
   }
 
   function handleExport() {
@@ -178,7 +459,7 @@ export default function Dashboard() {
 
   const filteredLeads = getFilteredLeads();
   const sources = Array.from(new Set(leads.map((l) => l.source).filter(Boolean))) as string[];
-  const statuses = Array.from(new Set(leads.map((l) => l.status).filter(Boolean))) as string[];
+  const todayKey = localDateKey(new Date());
   // Selections survive a filter change, but only visible ones are exported, so
   // the count shown has to match that rather than the raw set size.
   const selectedVisible = filteredLeads.filter((l) => selectedIds.has(l.id)).length;
@@ -219,65 +500,123 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16 gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                <Activity className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">
-                  LeadAI
-                </h1>
-                <p className="text-[11px] text-slate-400 leading-tight truncate">
-                  AI-powered lead scoring
-                  {selectedUpload?.model_auc
-                    ? ` · Model AUC ${selectedUpload.model_auc.toFixed(2)}`
-                    : ''}
-                </p>
-              </div>
+          <div className="grid grid-cols-[1fr_minmax(0,24rem)_1fr] items-center gap-3 h-16">
+            <div className="flex items-center min-w-0">
+              <BrandLogo size={32} />
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Labels collapse below sm, so each button needs its own name. */}
-              <button onClick={handleDownloadTemplate} className="btn-header" aria-label="Download CSV template">
-                <FileText className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Template</span>
-              </button>
+            <div className="relative w-full min-w-0 max-w-md justify-self-center">
+              <Search
+                className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                placeholder="Search name, phone, city…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-header"
+                aria-label="Search leads"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 justify-self-end">
+              <MenuDropdown
+                ariaLabel="Upload file"
+                triggerClassName="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition"
+                trigger={
+                  <>
+                    <UploadIcon className="w-4 h-4" />
+                    Upload file
+                    <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                  </>
+                }
+                items={[
+                  {
+                    id: 'template',
+                    label: 'CSV template',
+                    icon: <FileText className="w-4 h-4 text-slate-400" />,
+                    onSelect: handleDownloadTemplate,
+                  },
+                  {
+                    id: 'sheet',
+                    label: 'Live Sheet',
+                    icon: sheetSyncing ? (
+                      <Loader2 className="w-4 h-4 text-slate-400 animate-spin" />
+                    ) : workspace.sheet_url ? (
+                      <RefreshCw className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <Link2 className="w-4 h-4 text-slate-400" />
+                    ),
+                    onSelect: () => setShowSheetSync(true),
+                  },
+                  {
+                    id: 'upload',
+                    label: 'Upload CSV',
+                    icon: <UploadIcon className="w-4 h-4 text-slate-400" />,
+                    onSelect: () => setShowUploadModal(true),
+                  },
+                ]}
+              />
               <button
-                onClick={handleExport}
-                disabled={leads.length === 0}
-                className="btn-header"
-                aria-label="Export leads to CSV"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-              <button onClick={() => setShowPricing(true)} className="btn-header" aria-label="View pricing plans">
-                <CreditCard className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Pricing</span>
-              </button>
-              <button
-                onClick={() => setShowUploadModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition"
-              >
-                <UploadIcon className="w-3.5 h-3.5" />
-                Upload leads
-              </button>
-              <button
-                onClick={() => setShowProfile(true)}
-                className="p-2 text-slate-400 hover:text-slate-700 transition"
+                onClick={() => {
+                  setProfileSection('account');
+                  setShowProfile(true);
+                }}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
                 title="Your profile"
                 aria-label="Your profile"
               >
-                <UserCircle className="w-4 h-4" />
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt=""
+                    className="h-7 w-7 rounded-full object-cover border border-slate-200"
+                  />
+                ) : (
+                  <UserCircle className="w-5 h-5" />
+                )}
               </button>
-              <button
-                onClick={signOut}
-                className="p-2 text-slate-400 hover:text-slate-700 transition"
-                title="Sign out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              <MenuDropdown
+                ariaLabel="More actions"
+                items={[
+                  {
+                    id: 'export',
+                    label: 'Export CSV',
+                    icon: <Download className="w-4 h-4 text-slate-400" />,
+                    onSelect: handleExport,
+                    disabled: leads.length === 0,
+                  },
+                  ...(selectedUpload
+                    ? [
+                      {
+                        id: 'delete-upload',
+                        label: 'Delete upload',
+                        icon: <Trash2 className="w-4 h-4 text-red-500" />,
+                        onSelect: () => void handleDeleteUpload(selectedUpload.id),
+                        danger: true,
+                      },
+                    ]
+                    : []),
+                  {
+                    id: 'signout',
+                    label: 'Sign out',
+                    icon: <LogOut className="w-4 h-4 text-slate-400" />,
+                    onSelect: () => void signOut(),
+                    danger: true,
+                  },
+                ]}
+              />
             </div>
           </div>
         </div>
@@ -285,9 +624,8 @@ export default function Dashboard() {
 
       {(trial.active || trial.expired) && trial.endsAt && (
         <div
-          className={`text-sm py-2.5 px-4 text-center ${
-            trial.expired ? 'bg-amber-100 text-amber-900' : 'bg-teal-700 text-white'
-          }`}
+          className={`text-sm py-2.5 px-4 text-center ${trial.expired ? 'bg-amber-100 text-amber-900' : 'bg-blue-700 text-white'
+            }`}
         >
           {trial.expired ? (
             <>
@@ -301,7 +639,10 @@ export default function Dashboard() {
             </>
           )}{' '}
           <button
-            onClick={() => setShowPricing(true)}
+            onClick={() => {
+              setProfileSection('plans');
+              setShowProfile(true);
+            }}
             className="underline font-medium hover:opacity-80"
           >
             See plans
@@ -310,10 +651,10 @@ export default function Dashboard() {
       )}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-slate-900">Lead intelligence overview</h2>
+        <div id="overview" className="mb-6 scroll-mt-20">
+          <h2 className="text-xl font-bold text-slate-900">Your list at a glance</h2>
           <p className="text-sm text-slate-500 mt-0.5">
-            Every lead scored, ranked and ready for 1-click outreach.
+            Scores, sources, and what this batch could be worth — then the call list below.
           </p>
         </div>
 
@@ -331,11 +672,10 @@ export default function Dashboard() {
               <button
                 key={upload.id}
                 onClick={() => handleSelectUpload(upload)}
-                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs border transition ${
-                  selectedUpload?.id === upload.id
-                    ? 'border-teal-600 bg-teal-50 text-teal-800 font-medium'
-                    : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                }`}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs border transition ${selectedUpload?.id === upload.id
+                  ? 'border-blue-600 bg-blue-50 text-blue-800 font-medium'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  }`}
               >
                 {upload.file_name}
                 <span className="text-slate-400 ml-1.5">{upload.row_count}</span>
@@ -350,49 +690,48 @@ export default function Dashboard() {
               icon={Users}
               label="Total leads"
               value={leads.length.toLocaleString('en-IN')}
-              hint="Scored this month"
+              hint="On this list"
             />
             <StatCard
               icon={Target}
               label="High priority"
               value={highPriority.toLocaleString('en-IN')}
-              hint="Top 20% by score"
+              hint="Call these first"
             />
             <StatCard
               icon={TrendingUp}
               label="Predicted conversion"
               value={`${Math.round(predictedConversion * 100)}%`}
-              hint="Model estimate"
+              hint="Average chance they buy"
             />
             <StatCard
               icon={Gauge}
-              label="Average lead score"
+              label="Average score"
               value={avgScore.toString()}
-              hint="Across all leads"
+              hint="Out of 100"
             />
-            <div className="card p-4">
-              <div className="flex items-start justify-between">
-                <p className="text-xs text-slate-500">Monthly quota usage</p>
-              </div>
-              <p className="text-2xl font-bold text-slate-900 mt-2">
+            <TiltCard className="p-4">
+              <p className="text-xs font-medium text-slate-500">Plan usage</p>
+              <p className="text-2xl font-bold text-slate-900 mt-2 tracking-tight">
                 {Math.round(quotaShare * 100)}%
               </p>
               <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden mt-2">
                 <div
-                  className={`h-full rounded-full ${
-                    quotaShare >= 0.9 ? 'bg-red-500' : quotaShare >= 0.7 ? 'bg-amber-500' : 'bg-indigo-500'
-                  }`}
+                  className={`h-full rounded-full ${quotaShare >= 0.9 ? 'bg-red-500' : quotaShare >= 0.7 ? 'bg-amber-500' : 'bg-blue-500'
+                    }`}
                   style={{ width: `${Math.min(100, Math.max(quotaShare * 100, 1))}%` }}
                 />
               </div>
               <p className="text-[11px] text-slate-400 mt-1.5">
-                {monthlyCount.toLocaleString('en-IN')} / {plan.lead_limit.toLocaleString('en-IN')} leads
+                {monthlyCount.toLocaleString('en-IN')} of {plan.lead_limit.toLocaleString('en-IN')} this month
               </p>
-            </div>
+            </TiltCard>
           </div>
         )}
 
-        <LeadCharts leads={leads} />
+        <div id="charts" className="scroll-mt-20">
+          <LeadCharts leads={leads} />
+        </div>
 
         {loadingData ? (
           <div className="card p-12 flex items-center justify-center">
@@ -405,69 +744,178 @@ export default function Dashboard() {
             </div>
             <h3 className="text-base font-semibold text-slate-800 mb-1">No leads yet</h3>
             <p className="text-sm text-slate-500 mb-4">
-              Upload a CSV or Excel file to start scoring your leads.
+              Upload a CSV/Excel file, connect a live Google Sheet, or paste rows from Sheets.
             </p>
-            <button onClick={() => setShowUploadModal(true)} className="btn-primary inline-flex items-center gap-2">
-              <UploadIcon className="w-4 h-4" />
-              Upload Your First File
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button onClick={() => setShowUploadModal(true)} className="btn-primary inline-flex items-center gap-2">
+                <UploadIcon className="w-4 h-4" />
+                Upload Your First File
+              </button>
+              <button
+                onClick={() => setShowSheetSync(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+              >
+                <Link2 className="w-4 h-4" />
+                Connect Google Sheet
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="card overflow-hidden">
-            <div className="p-4 flex flex-col lg:flex-row gap-3 border-b border-slate-100">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search by name, phone, city or lead ID"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="input-field py-2 pl-9 w-full"
+          <div id="call-list" className="card scroll-mt-20">
+            <div className="p-4 flex flex-col gap-3 border-b border-slate-100">
+              <div className="flex flex-wrap items-center gap-2">
+                <ScoreFirstToggle on={scoreFirst} onChange={setScoreFirst} />
+
+                <div className="ml-auto flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    disabled={filtersAreDefault({
+                      priority: priorityFilter,
+                      source: sourceFilter,
+                      status: statusFilter,
+                      scoreFirst,
+                      date: dateFilter,
+                    })}
+                    className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Reset filters"
+                    aria-label="Reset filters"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                  <MenuDropdown
+                    ariaLabel="Language"
+                    triggerClassName="select-toolbar"
+                    trigger={
+                      <>
+                        <Languages className="w-3.5 h-3.5 text-slate-500" />
+                        <span>
+                          {OUTREACH_LANG_OPTIONS.find((o) => o.id === outreachLang)?.label ?? 'EN'}
+                        </span>
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      </>
+                    }
+                    items={OUTREACH_LANG_OPTIONS.map((opt) => ({
+                      id: `lang-${opt.id}`,
+                      label: opt.label,
+                      active: outreachLang === opt.id,
+                      onSelect: () => setLang(opt.id),
+                    }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void copySheetOutcomes()}
+                    className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition shrink-0"
+                    title={uiLabel(outreachLang, 'sheetUpdate')}
+                    aria-label={uiLabel(outreachLang, 'sheetUpdate')}
+                  >
+                    <ClipboardCopy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {actionError && (
+                <p className="text-xs flex items-center gap-1.5 text-red-600">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  {actionError}
+                </p>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:flex-wrap">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <ToolbarFilter
+                    ariaLabel="Filter by date"
+                    value={dateFilter}
+                    label={dateFilterLabel(dateFilter)}
+                    onChange={setDateFilter}
+                    options={DATE_FILTER_PRESETS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                  />
+                  <DayPicker
+                    value={isCalendarDayFilter(dateFilter) ? dateFilter : null}
+                    max={todayKey}
+                    onChange={setDateFilter}
+                  />
+                </div>
+                <ToolbarFilter
+                  ariaLabel="Filter by priority"
+                  value={priorityFilter}
+                  onChange={(value) => setPriorityFilter(value as 'all' | Priority)}
+                  options={[
+                    { value: 'all', label: 'All priorities' },
+                    {
+                      value: 'high',
+                      label: 'High',
+                      icon: <span className={`w-2 h-2 rounded-full ${PRIORITY_STYLES.high.dot}`} />,
+                    },
+                    {
+                      value: 'medium',
+                      label: 'Medium',
+                      icon: <span className={`w-2 h-2 rounded-full ${PRIORITY_STYLES.medium.dot}`} />,
+                    },
+                    {
+                      value: 'low',
+                      label: 'Low',
+                      icon: <span className={`w-2 h-2 rounded-full ${PRIORITY_STYLES.low.dot}`} />,
+                    },
+                  ]}
+                />
+                <ToolbarFilter
+                  ariaLabel="Filter by source"
+                  value={sourceFilter}
+                  onChange={setSourceFilter}
+                  options={[
+                    { value: 'all', label: 'All sources' },
+                    ...sources.map((s) => ({ value: s, label: formatSource(s) })),
+                  ]}
+                />
+                <ToolbarFilter
+                  ariaLabel="Filter by status"
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={[
+                    { value: 'all', label: 'All statuses' },
+                    ...GRID_STATUS_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                      icon: <span className={`w-2 h-2 rounded-full ${option.dot}`} />,
+                      tone:
+                        option.value === 'won'
+                          ? ('success' as const)
+                          : option.value === 'lost'
+                            ? ('danger' as const)
+                            : undefined,
+                    })),
+                    ...customStatuses.map((option) => ({
+                      value: option.slug,
+                      label: option.label,
+                      icon: <span className="w-2 h-2 rounded-full bg-teal-500" />,
+                    })),
+                  ]}
+                />
+                <MenuDropdown
+                  ariaLabel={uiLabel(outreachLang, 'waTemplate')}
+                  align="left"
+                  triggerClassName="select-toolbar w-full sm:w-auto justify-between min-w-[9.5rem]"
+                  trigger={
+                    <>
+                      <span className="truncate">
+                        {WA_TEMPLATE_OPTIONS.find((t) => t.id === waTemplate)?.labels[outreachLang] ??
+                          'Follow-up'}
+                      </span>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    </>
+                  }
+                  items={WA_TEMPLATE_OPTIONS.map((t) => ({
+                    id: `tpl-${t.id}`,
+                    label: t.labels[outreachLang],
+                    active: waTemplate === t.id,
+                    onSelect: () => setWaTemplate(t.id),
+                  }))}
                 />
               </div>
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value as 'all' | Priority)}
-                className="input-field py-2 w-auto"
-              >
-                <option value="all">All priorities</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="input-field py-2 w-auto"
-              >
-                <option value="all">All sources</option>
-                {sources.map((s) => (
-                  <option key={s} value={s}>
-                    {formatSource(s)}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="input-field py-2 w-auto"
-              >
-                <option value="all">All statuses</option>
-                {statuses.map((s) => (
-                  <option key={s} value={s}>
-                    {formatStatus(s).label}
-                  </option>
-                ))}
-              </select>
-              {selectedUpload && (
-                <button
-                  onClick={() => handleDeleteUpload(selectedUpload.id)}
-                  className="btn-danger flex items-center gap-2 shrink-0"
-                  title="Delete this upload"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
             </div>
 
             <div className="overflow-x-auto">
@@ -497,117 +945,209 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {filteredLeads.map((lead) => {
-                    const priority = lead.priority ?? 'low';
-                    const status = formatStatus(lead.status);
-                    const waNumber = whatsappNumber(lead.phone);
-                    const callHref = telLink(lead.phone);
-                    return (
-                      <tr key={lead.id} className="hover:bg-slate-50/60 transition">
-                        <td className="pl-4 pr-2 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(lead.id)}
-                            onChange={() => toggleLead(lead.id)}
-                            className="rounded border-slate-300"
-                            aria-label={`Select ${lead.name ?? 'lead'}`}
-                          />
-                        </td>
-                        <td className="px-2 py-3">
-                          <p className="font-semibold text-slate-800 text-[13px] truncate max-w-[220px]">
-                            {lead.name || '—'}
-                          </p>
-                          <p className="text-[11px] text-slate-400 truncate max-w-[220px]">
-                            {lead.phone || 'No phone'}
-                            {lead.city ? ` · ${lead.city}` : ''}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-slate-800 text-[13px] w-6">
-                              {lead.score_0_100 ?? 0}
-                            </span>
-                            <div className="w-14 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${PRIORITY_STYLES[priority].dot}`}
-                                style={{ width: `${lead.score_0_100 ?? 0}%` }}
-                              />
+                  {filteredLeads.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-12 text-center">
+                        <p className="text-sm font-medium text-slate-800 mb-1">
+                          No leads match these filters
+                        </p>
+                        <p className="text-xs text-slate-500 mb-3">
+                          Try Today or Last 7 days, or tap reset.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLeads.map((lead) => {
+                      const priority = lead.priority ?? 'low';
+                      const status = gridStatusAppearance(lead.status, lead.snoozed_until);
+                      const waHref = whatsappHref(
+                        lead.phone,
+                        whatsappTemplateMessage(waTemplate, outreachLang, lead.name)
+                      );
+                      const callHref = telLink(lead.phone);
+                      return (
+                        <tr key={lead.id} className="hover:bg-slate-50/60 transition">
+                          <td className="pl-4 pr-2 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(lead.id)}
+                              onChange={() => toggleLead(lead.id)}
+                              className="rounded border-slate-300"
+                              aria-label={`Select ${lead.name ?? 'lead'}`}
+                            />
+                          </td>
+                          <td className="px-2 py-3">
+                            <p className="font-semibold text-slate-800 text-[13px] truncate max-w-[220px] flex items-center gap-1.5">
+                              <span className="truncate">{lead.name || '—'}</span>
+                              {isSnoozed(lead.snoozed_until) && (
+                                <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                  <Moon className="w-3 h-3" />
+                                  {uiLabel(outreachLang, 'tomorrow')}
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-[11px] text-slate-400 truncate max-w-[220px]">
+                              {lead.phone || 'No phone'}
+                              {lead.city ? ` · ${lead.city}` : ''}
+                            </p>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800 text-[13px] w-6">
+                                {lead.score_0_100 ?? 0}
+                              </span>
+                              <div className="w-14 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${PRIORITY_STYLES[priority].dot}`}
+                                  style={{ width: `${lead.score_0_100 ?? 0}%` }}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium border ${PRIORITY_STYLES[priority].className}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
-                            {PRIORITY_STYLES[priority].label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
-                          {formatSource(lead.source)}
-                        </td>
-                        <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
-                          {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
-                        </td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={`inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded-md text-[11px] font-medium border ${status.className}`}
-                          >
-                            {status.label}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 pr-4">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {waNumber ? (
-                              <a
-                                href={`https://wa.me/${waNumber}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 text-[11px] font-medium hover:bg-emerald-50 transition"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                WhatsApp
-                              </a>
-                            ) : (
-                              <span className="text-[11px] text-slate-300 px-2.5">No number</span>
-                            )}
-                            {callHref && (
-                              <a
-                                href={callHref}
-                                className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-slate-700 transition"
-                                title={`Call ${lead.phone}`}
-                              >
-                                <Phone className="w-3.5 h-3.5" />
-                              </a>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium border ${PRIORITY_STYLES[priority].className}`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
+                              {PRIORITY_STYLES[priority].label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
+                            {formatSource(lead.source)}
+                          </td>
+                          <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
+                            {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
+                          </td>
+                          <td className="px-3 py-3">
+                            <MenuDropdown
+                              ariaLabel={`Status for ${lead.name ?? 'lead'}`}
+                              align="left"
+                              triggerClassName={`inline-flex items-center gap-1.5 whitespace-nowrap pl-2 pr-1.5 py-0.5 rounded-full text-[11px] font-medium border ${status.className}`}
+                              trigger={
+                                <>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+                                  {customStatuses.find(
+                                    (option) => option.slug === normalizeLeadStatus(lead.status),
+                                  )?.label ?? status.label}
+                                  <ChevronDown className="w-3 h-3 opacity-50" aria-hidden="true" />
+                                </>
+                              }
+                              items={[
+                                ...GRID_STATUS_OPTIONS.map((option) => ({
+                                  id: option.value,
+                                  label: option.label,
+                                  icon: <span className={`w-2 h-2 rounded-full ${option.dot}`} />,
+                                  active: isGridStatusActive(
+                                    option.value,
+                                    lead.status,
+                                    lead.snoozed_until,
+                                  ),
+                                  tone:
+                                    option.value === 'won'
+                                      ? ('success' as const)
+                                      : option.value === 'lost'
+                                        ? ('danger' as const)
+                                        : undefined,
+                                  onSelect: () => setGridStatus(lead.id, option.value),
+                                })),
+                                ...customStatuses.map((option) => ({
+                                  id: `custom-${option.slug}`,
+                                  label: option.label,
+                                  icon: <span className="w-2 h-2 rounded-full bg-teal-500" />,
+                                  active:
+                                    !isSnoozedOpen(lead.status, lead.snoozed_until) &&
+                                    normalizeLeadStatus(lead.status) === option.slug,
+                                  onSelect: () => applyCustomGridStatus(lead.id, option.slug),
+                                })),
+                              ]}
+                              footer={(close) => (
+                                <AddCustomStatusField
+                                  onAdd={(raw) => {
+                                    const error = addCustomGridStatus(lead.id, raw);
+                                    if (!error) close();
+                                    return error;
+                                  }}
+                                />
+                              )}
+                            />
+                          </td>
+                          <td className="px-3 py-3 pr-4">
+                            <div className="flex items-center justify-end gap-0.5">
+                              {waHref ? (
+                                <a
+                                  href={waHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => markContacted(lead.id)}
+                                  className="p-2 rounded-lg text-green-700 hover:bg-green-50 transition"
+                                  title={uiLabel(outreachLang, 'whatsapp')}
+                                  aria-label={uiLabel(outreachLang, 'whatsapp')}
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                </a>
+                              ) : (
+                                <span
+                                  className="p-2 text-slate-300"
+                                  title="No phone number"
+                                  aria-hidden="true"
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                </span>
+                              )}
+                              {callHref ? (
+                                <a
+                                  href={callHref}
+                                  onClick={() => markContacted(lead.id)}
+                                  className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 transition"
+                                  title={uiLabel(outreachLang, 'call')}
+                                  aria-label={uiLabel(outreachLang, 'call')}
+                                >
+                                  <Phone className="w-4 h-4" />
+                                </a>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
 
             <div className="px-4 py-3 text-xs text-slate-400 border-t border-slate-100">
-              Showing {filteredLeads.length} of {leads.length} leads
+              {`Showing ${filteredLeads.length} of ${leads.length} leads`}
               {selectedVisible > 0 && ` · ${selectedVisible} selected for export`}
             </div>
           </div>
         )}
-
-        <div className="mt-10 pt-5 border-t border-slate-200 flex flex-wrap gap-x-5 gap-y-2">
-          {LEGAL_LINKS.map((link) => (
-            <Link key={link.to} to={link.to} className="text-xs text-slate-400 hover:text-slate-700">
-              {link.label}
-            </Link>
-          ))}
-        </div>
       </div>
 
-      {showPricing && <PricingModal onClose={() => setShowPricing(false)} />}
+      {copyNote && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 max-w-sm rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm text-emerald-800 shadow-lg shadow-slate-900/10"
+        >
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="font-medium">{copyNote}</span>
+          <button
+            type="button"
+            onClick={() => setCopyNote(null)}
+            className="ml-1 -mr-1 p-1 rounded-lg text-emerald-600/70 hover:text-emerald-900 hover:bg-emerald-50 transition"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {showProfile && (
-        <ProfileModal monthlyCount={monthlyCount} onClose={() => setShowProfile(false)} />
+        <ProfileModal
+          monthlyCount={monthlyCount}
+          initialSection={profileSection}
+          onClose={() => setShowProfile(false)}
+        />
       )}
 
       {showUploadModal && (
@@ -619,6 +1159,17 @@ export default function Dashboard() {
             setShowUploadModal(false);
             await loadData();
             await refreshWorkspace();
+          }}
+        />
+      )}
+      {showSheetSync && (
+        <SheetSyncModal
+          workspace={workspace}
+          planLimit={plan.lead_limit}
+          onClose={() => setShowSheetSync(false)}
+          onSynced={async () => {
+            await refreshWorkspace();
+            await loadData();
           }}
         />
       )}
@@ -638,14 +1189,16 @@ function StatCard({
   hint: string;
 }) {
   return (
-    <div className="card p-4">
-      <div className="flex items-start justify-between">
-        <p className="text-xs text-slate-500">{label}</p>
-        <Icon className="w-4 h-4 text-slate-300" />
+    <TiltCard className="p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-slate-500">{label}</p>
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50">
+          <Icon className="w-3.5 h-3.5 text-slate-400" />
+        </span>
       </div>
-      <p className="text-2xl font-bold text-slate-900 mt-2">{value}</p>
+      <p className="text-2xl font-bold text-slate-900 mt-2 tracking-tight">{value}</p>
       <p className="text-[11px] text-slate-400 mt-1">{hint}</p>
-    </div>
+    </TiltCard>
   );
 }
 
@@ -673,6 +1226,42 @@ function UploadModal({
   // slow enough to need feedback where reading a CSV was effectively instant.
   const [readingFile, setReadingFile] = useState(false);
   const [sheetNotice, setSheetNotice] = useState<string | null>(null);
+  const [pasteText, setPasteText] = useState('');
+
+  function goToMapping(text: string, name: string, notice: string | null = null) {
+    const parsed = parseCSV(text);
+    if (parsed.rows.length === 0) {
+      setError(
+        'No lead rows found — include a header row and at least one lead underneath.'
+      );
+      return;
+    }
+    setHeaders(parsed.headers);
+    setRows(parsed.rows);
+    setMapping(guessColumnMapping(parsed.headers));
+    setCsvText(text);
+    setFileName(name);
+    setSheetNotice(notice);
+    setStep('mapping');
+  }
+
+  function handlePasteFromSheet() {
+    setError(null);
+    const text = pasteText.trim();
+    if (!text) {
+      setError('Paste your Google Sheet rows first (include the header row).');
+      return;
+    }
+    try {
+      goToMapping(text, 'google-sheets-paste.tsv', 'Imported from a Google Sheets paste.');
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not read that paste. Copy the header row and lead rows from Sheets, then try again.'
+      );
+    }
+  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -681,28 +1270,13 @@ function UploadModal({
       // Excel is converted to CSV text at this boundary, so every step after
       // this one is identical for both formats.
       const { csvText: text, sheetName, skippedSheets } = await readUploadAsCsv(file);
-      const parsed = parseCSV(text);
-      // The downloaded template is headers-only, so this is the expected
-      // state when someone uploads it before filling it in.
-      if (parsed.rows.length === 0) {
-        setError(
-          sheetName
-            ? `Sheet "${sheetName}" has column headings but no lead rows — add your leads underneath them, then upload again.`
-            : 'This file has no lead rows — add your leads below the header row, then upload again.'
-        );
-        return;
-      }
-      setHeaders(parsed.headers);
-      setRows(parsed.rows);
-      setMapping(guessColumnMapping(parsed.headers));
-      setCsvText(text);
-      setFileName(file.name);
-      setSheetNotice(
+      goToMapping(
+        text,
+        file.name,
         skippedSheets.length > 0 && sheetName
           ? `Read sheet "${sheetName}". This workbook also has ${skippedSheets.join(', ')} — only one sheet is read at a time.`
           : null
       );
-      setStep('mapping');
     } catch (err) {
       // readUploadAsCsv explains what is wrong with the file; parseCSV does not.
       setError(
@@ -716,11 +1290,11 @@ function UploadModal({
   }
 
   function handleDownloadTemplate() {
-    downloadCSV(generateTemplateCSV(), 'leadai_template.csv');
+    downloadCSV(generateTemplateCSV(), 'leadscore_template.csv');
   }
 
   function handleDownloadSample() {
-    downloadCSV(generateSampleCSV(), 'leadai_sample_leads.csv');
+    downloadCSV(generateSampleCSV(), 'leadscore_sample_leads.csv');
   }
 
   async function handleProcess() {
@@ -776,11 +1350,10 @@ function UploadModal({
           {step === 'upload' && (
             <div>
               <div
-                className={`border-2 border-dashed rounded-xl p-10 text-center transition ${
-                  readingFile
-                    ? 'border-slate-200 cursor-wait'
-                    : 'border-slate-300 hover:border-teal-500 cursor-pointer'
-                }`}
+                className={`border-2 border-dashed rounded-xl p-10 text-center transition ${readingFile
+                  ? 'border-slate-200 cursor-wait'
+                  : 'border-slate-300 hover:border-blue-500 cursor-pointer'
+                  }`}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();
@@ -825,10 +1398,31 @@ function UploadModal({
                   }}
                 />
               </div>
+
+              <div className="mt-5">
+                <p className="text-xs font-medium text-slate-600 mb-1.5">
+                  Or paste from Google Sheets
+                </p>
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  rows={4}
+                  placeholder="In Sheets: select header + rows → Copy → paste here"
+                  className="input-field w-full text-xs font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handlePasteFromSheet}
+                  className="mt-2 btn-secondary text-sm"
+                >
+                  Use pasted rows
+                </button>
+              </div>
+
               <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
                 <button
                   onClick={handleDownloadTemplate}
-                  className="text-sm text-teal-700 hover:underline flex items-center gap-1.5"
+                  className="text-sm text-blue-700 hover:underline flex items-center gap-1.5"
                 >
                   <FileText className="w-4 h-4" />
                   Download template
@@ -863,9 +1457,11 @@ function UploadModal({
                 <div>
                   <p className="font-medium text-slate-600 mb-0.5">Accepted status values</p>
                   <p>
-                    {RESOLVED_STATUSES.join(', ')} are settled outcomes the model learns from (shown
-                    as Converted / Not converted / No response). At least one{' '}
-                    <span className="font-medium">won</span> (converted) lead is required. Open
+                    Settled outcomes the model learns from:{' '}
+                    <span className="font-medium">converted</span>,{' '}
+                    <span className="font-medium">not converted</span>, and{' '}
+                    <span className="font-medium">no response</span> (CSV values:{' '}
+                    {RESOLVED_STATUSES.join(', ')}). At least one converted lead is required. Open
                     stages such as new, contacted, or unknown are scored but not used for training.
                   </p>
                 </div>
@@ -882,7 +1478,7 @@ function UploadModal({
                 </div>
               )}
               <p className="text-sm text-slate-600 mb-4">
-                Map your columns to LeadAI fields. We've auto-detected the mapping — adjust if needed.
+                Map your columns to LeadScore fields. We've auto-detected the mapping — adjust if needed.
               </p>
               <div className="space-y-3">
                 <MappingField label="Name" value={mapping.name} headers={headers} onChange={(v) => setMapping({ ...mapping, name: v })} required />
@@ -913,8 +1509,8 @@ function UploadModal({
             <div className="py-12 text-center">
               {result ? (
                 <>
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-100 mb-4">
-                    <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-100 mb-4">
+                    <CheckCircle2 className="w-7 h-7 text-green-600" />
                   </div>
                   <h3 className="text-lg font-bold text-slate-900 mb-1">Scoring Complete!</h3>
                   <p className="text-sm text-slate-500 mb-4">
@@ -950,7 +1546,7 @@ function UploadModal({
                 </>
               ) : (
                 <>
-                  <Loader2 className="w-8 h-8 animate-spin text-teal-600 mx-auto mb-4" />
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
                   <h3 className="text-lg font-bold text-slate-900 mb-1">Scoring your leads...</h3>
                   <p className="text-sm text-slate-500">Training model and computing conversion probabilities</p>
                 </>
@@ -981,18 +1577,17 @@ function StatusGuidance({
   if (summary.trainable.length === 0 && summary.open.length === 0) return null;
 
   const describe = (entries: { value: string; count: number }[]) =>
-    entries.map((e) => `${e.value} (${e.count})`).join(', ');
+    entries.map((e) => `${formatStatus(e.value).label} (${e.count})`).join(', ');
 
   const hasNegatives = summary.trainable.some((e) => e.value !== 'won');
 
   return (
     <div className="ml-[172px] text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1.5">
       <p className="text-slate-600">
-        The model trains only on settled outcomes:{' '}
-        <span className="font-medium">{RESOLVED_STATUSES.join(', ')}</span>.
+        The model trains only on settled outcomes: converted, not converted, and no response.
       </p>
       {summary.trainable.length > 0 && (
-        <p className="text-emerald-700">Trains on: {describe(summary.trainable)}</p>
+        <p className="text-green-700">Trains on: {describe(summary.trainable)}</p>
       )}
       {summary.open.length > 0 && (
         <p className="text-slate-500">
@@ -1001,16 +1596,16 @@ function StatusGuidance({
       )}
       {summary.wonCount === 0 && (
         <p className="text-amber-700">
-          Nothing is marked as converted (<span className="font-medium">won</span>), so there is
-          no outcome to learn. Map a column that includes converted leads, or set those rows to
-          &quot;won&quot; in your file before uploading.
+          Nothing is marked as converted, so there is no outcome to learn. Map a column that
+          includes converted leads, or set those rows to{' '}
+          <span className="font-medium">converted</span> / CSV value{' '}
+          <span className="font-medium">won</span> before uploading.
         </p>
       )}
       {summary.wonCount > 0 && !hasNegatives && (
         <p className="text-amber-700">
           Every settled lead is converted, so the model has no contrast cases. Include not
-          converted (<span className="font-medium">lost</span>) or no-response leads for a real
-          ranking model.
+          converted or no-response leads for a real ranking model.
         </p>
       )}
     </div>
@@ -1020,16 +1615,130 @@ function StatusGuidance({
 function StepIndicator({ active, done, label }: { active: boolean; done: boolean; label: string }) {
   return (
     <span
-      className={`px-3 py-1 rounded-full text-xs font-medium ${
-        done
-          ? 'bg-emerald-100 text-emerald-700'
-          : active
-          ? 'bg-teal-700 text-white'
+      className={`px-3 py-1 rounded-full text-xs font-medium ${done
+        ? 'bg-green-100 text-green-700'
+        : active
+          ? 'bg-blue-700 text-white'
           : 'bg-slate-100 text-slate-400'
-      }`}
+        }`}
     >
       {label}
     </span>
+  );
+}
+
+function AddCustomStatusField({
+  onAdd,
+}: {
+  onAdd: (raw: string) => string | null;
+}) {
+  const [value, setValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      className="px-2 pb-1.5 pt-0.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const nextError = onAdd(value);
+        if (nextError) {
+          setError(nextError);
+          return;
+        }
+        setValue('');
+        setError(null);
+      }}
+    >
+      <input
+        value={value}
+        onChange={(event) => {
+          setValue(event.target.value);
+          setError(null);
+        }}
+        maxLength={CUSTOM_STATUS_MAX_LEN}
+        placeholder="Add status…"
+        aria-label="Add a custom status"
+        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+      />
+      {error ? <p className="text-[11px] text-red-600 mt-1 px-0.5">{error}</p> : null}
+    </form>
+  );
+}
+
+function ScoreFirstToggle({
+  on,
+  onChange,
+}: {
+  on: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label="Highest scores first"
+      onClick={() => onChange(!on)}
+      className="inline-flex items-center gap-2.5 min-w-0 text-left"
+    >
+      <span
+        className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${on ? 'bg-blue-700' : 'bg-slate-300'
+          }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${on ? 'translate-x-4' : 'translate-x-0'
+            }`}
+        />
+      </span>
+      <span className="text-xs text-slate-600 min-w-0">
+        {on
+          ? 'Highest scores first — call or WhatsApp these today.'
+          : 'Newest first — by the day they arrived.'}
+      </span>
+    </button>
+  );
+}
+
+function ToolbarFilter({
+  ariaLabel,
+  value,
+  label,
+  options,
+  onChange,
+}: {
+  ariaLabel: string;
+  value: string;
+  label?: string;
+  options: Array<{
+    value: string;
+    label: string;
+    icon?: ReactNode;
+    tone?: 'success' | 'danger';
+  }>;
+  onChange: (value: string) => void;
+}) {
+  const current = options.find((option) => option.value === value);
+  return (
+    <MenuDropdown
+      ariaLabel={ariaLabel}
+      align="left"
+      triggerClassName="select-toolbar w-full sm:w-auto justify-between min-w-[9.5rem]"
+      trigger={
+        <>
+          {current?.icon}
+          <span className="truncate">{label ?? current?.label ?? ariaLabel}</span>
+          <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+        </>
+      }
+      items={options.map((option) => ({
+        id: option.value || 'all',
+        label: option.label,
+        icon: option.icon,
+        active: option.value === value,
+        tone: option.tone,
+        onSelect: () => onChange(option.value),
+      }))}
+    />
   );
 }
 
@@ -1046,20 +1755,35 @@ function MappingField({
   onChange: (v: string) => void;
   required?: boolean;
 }) {
+  const options = [
+    { value: '', label: '— Not mapped —' },
+    ...headers.map((header) => ({ value: header, label: header })),
+  ];
+  const current = options.find((option) => option.value === value);
   return (
     <div className="flex items-center gap-3">
       <label className="text-sm font-medium text-slate-600 w-40 shrink-0">
         {label}
         {required && <span className="text-red-500">*</span>}
       </label>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="input-field py-2 flex-1">
-        <option value="">— Not mapped —</option>
-        {headers.map((h) => (
-          <option key={h} value={h}>
-            {h}
-          </option>
-        ))}
-      </select>
+      <MenuDropdown
+        ariaLabel={label}
+        align="left"
+        className="flex-1 min-w-0"
+        triggerClassName="input-field py-2 w-full justify-between"
+        trigger={
+          <>
+            <span className="truncate">{current?.label ?? '— Not mapped —'}</span>
+            <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+          </>
+        }
+        items={options.map((option) => ({
+          id: option.value || 'unmapped',
+          label: option.label,
+          active: option.value === value,
+          onSelect: () => onChange(option.value),
+        }))}
+      />
     </div>
   );
 }

@@ -334,11 +334,11 @@ describe('validateLeadsForScoring', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  // The label is derived solely from status === 'won', so without one the model
-  // trains on an all-zero target and scores every lead identically.
-  it('rejects a file with no won leads', () => {
+  // The label is derived from converted status (`won` in CSV), so without one
+  // the model trains on an all-zero target and scores every lead identically.
+  it('rejects a file with no converted leads', () => {
     const result = validateLeadsForScoring([makeLead({ status: 'lost' }), makeLead({ status: 'new' })]);
-    expect(result.error).toContain("No leads have status 'won'");
+    expect(result.error).toContain('No leads are marked as converted');
   });
 
   it('warns when there are no negative examples to contrast against', () => {

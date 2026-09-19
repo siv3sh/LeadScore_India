@@ -11,8 +11,13 @@
 const GSTIN: string | null = null;
 
 export const COMPANY = {
-  /** The name the service trades under. */
-  tradeName: 'LeadAI',
+  /** The name the service trades under (shown in product UI). */
+  tradeName: 'LeadScore',
+  /**
+   * Prior public name — same product. Keep so people who received LeadAI links
+   * still recognize the brand; both leadai.* and leadscore.* host this app.
+   */
+  formerTradeName: 'LeadAI',
   /**
    * The entity that actually takes the money. Must match the account name
    * registered with Razorpay, or payouts fail verification.

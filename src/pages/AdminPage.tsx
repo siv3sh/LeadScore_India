@@ -6,10 +6,10 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  Shield,
   SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import BrandLogo from '@/components/BrandLogo';
 import {
   buildAdminStats,
   fetchAdminActions,
@@ -102,9 +102,7 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                <Shield className="w-5 h-5" />
-              </div>
+              <BrandLogo size={36} showWordmark={false} />
               <div className="min-w-0">
                 <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">
                   Administrator
@@ -232,7 +230,7 @@ export default function AdminPage() {
                           <div className="flex items-center gap-2">
                             <span className="text-slate-800">{row.email || '—'}</span>
                             {row.isAdmin && (
-                              <span className="text-[10px] font-bold tracking-wide text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-1.5 py-0.5">
+                              <span className="text-[10px] font-bold tracking-wide text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-1.5 py-0.5">
                                 ADMIN
                               </span>
                             )}

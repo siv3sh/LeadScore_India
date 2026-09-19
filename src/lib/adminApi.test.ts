@@ -15,6 +15,7 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
     id: 'u1',
     email: 'owner@brand.com',
     is_admin: false,
+    avatar_url: null,
     created_at: '2026-09-01T00:00:00.000Z',
     ...overrides,
   };

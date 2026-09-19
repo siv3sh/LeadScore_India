@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { TrendingUp, Mail, Lock, Building2, Loader2 } from 'lucide-react';
+import { Mail, Lock, Building2, Loader2 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { useAuth } from '@/lib/auth';
 import { COMPANY, LEGAL_LINKS } from '@/lib/company';
 import { PLANS } from '@/types';
@@ -35,23 +36,28 @@ export default function AuthPage() {
         return;
       }
       const { error } = await signUp(email, password, workspaceName);
-      if (error) setError(error);
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) setError(error);
+      if (error) {
+        setError(error);
+        setLoading(false);
+      }
+      return;
     }
-    setLoading(false);
+
+    const { error } = await signIn(email, password);
+    if (error) {
+      setError(error);
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-teal-50/30 to-slate-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-[#E8F1FF]/60 to-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-700 text-white mb-4 shadow-lg shadow-teal-700/20">
-            <TrendingUp className="w-7 h-7" />
+          <div className="flex justify-center mb-3">
+            <BrandLogo size={48} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">{COMPANY.tradeName}</h1>
-          <p className="text-sm text-slate-500 mt-1">Stop guessing who to call first</p>
+          <p className="text-sm text-slate-500">Stop guessing who to call first</p>
         </div>
 
         <div className="card p-8">
@@ -143,7 +149,7 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => navigate(mode === 'signin' ? '/signup' : '/login')}
-              className="text-teal-700 font-medium hover:underline"
+              className="text-blue-700 font-medium hover:underline"
             >
               {mode === 'signin' ? 'Sign up' : 'Sign in'}
             </button>

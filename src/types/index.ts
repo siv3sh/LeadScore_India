@@ -3,6 +3,13 @@ export interface Workspace {
   user_id: string;
   name: string;
   created_at: string;
+  /** Google Sheets link the workspace syncs from (optional). */
+  sheet_url: string | null;
+  /** Saved column mapping for sheet sync. */
+  sheet_mapping: Record<string, string> | null;
+  sheet_sync_enabled: boolean;
+  sheet_last_synced_at: string | null;
+  sheet_last_error: string | null;
 }
 
 /**
@@ -14,6 +21,8 @@ export interface Profile {
   /** Snapshot taken at signup; the session's email is the live one. */
   email: string;
   is_admin: boolean;
+  /** Public Storage URL. Null until the user uploads a photo. */
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -82,6 +91,8 @@ export interface Lead {
   score_0_100: number | null;
   priority: Priority | null;
   suggested_action: string | null;
+  /** When in the future, hide from Today's list until then. */
+  snoozed_until: string | null;
   created_at: string;
 }
 
@@ -102,28 +113,28 @@ export const PLANS: PlanInfo[] = [
     name: 'Free Trial',
     price: 0,
     lead_limit: 100,
-    features: ['Basic scoring', 'CSV export'],
+    features: ['Ranked call list', 'CSV export'],
   },
   {
     id: 'starter',
     name: 'Starter',
     price: 1999,
     lead_limit: 1000,
-    features: ['Full ML scoring', 'Priority filters', 'CSV export'],
+    features: ['AI-ranked leads', 'Priority filters', 'CSV export'],
   },
   {
     id: 'growth',
     name: 'Growth',
     price: 4999,
     lead_limit: 10000,
-    features: ['Full ML scoring', 'Advanced filters', 'CSV export'],
+    features: ['AI-ranked leads', 'Advanced filters', 'CSV export'],
   },
   {
     id: 'pro',
     name: 'Pro',
     price: 6999,
     lead_limit: 50000,
-    features: ['Full ML scoring', 'All features', 'Priority support'],
+    features: ['AI-ranked leads', 'All filters', 'Priority support'],
   },
 ];
 

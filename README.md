@@ -1,4 +1,4 @@
-# LeadAI
+# LeadScore (also LeadAI)
 
 AI-powered lead scoring for D2C brands and local service businesses in India. Upload your leads as a CSV or Excel file, get conversion scores, and prioritize your outreach.
 
@@ -61,7 +61,7 @@ For Razorpay (configured as edge function secrets, not in `.env`):
 | `created_at` | timestamp | When the lead was created |
 | `order_value` | float | Total order value (can be 0) |
 | `num_orders` | int | Number of orders placed |
-| `status` | string | won, lost, no_response, unknown |
+| `status` | string | Outcome: converted / not converted / no response / open (CSV: `won`, `lost`, `no_response`, `unknown`) |
 
 ### Optional Columns
 | Column | Type | Description |
@@ -73,7 +73,7 @@ You can download a sample CSV template from the upload modal.
 
 ## Scoring Logic
 
-- **Target**: `converted_in_30_days = 1` if status is "won" and the lead converted within 30 days of creation
+- **Target**: converted = 1 when status is converted (`won` in CSV); otherwise 0 for settled non-converted outcomes
 - **Features**: days since lead created, days since last contact, num_orders, order_value, hour of day, day of week, source (one-hot encoded), num contacts
 - **Model**: Logistic regression with 200 epochs of gradient descent, 80/20 train/test split
 - **AUC** is computed and displayed as a model quality metric

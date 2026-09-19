@@ -401,7 +401,7 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
   if (unlabeledCount > 0) {
     warnings.push(
       `${unlabeledCount} lead${unlabeledCount === 1 ? '' : 's'} have no settled outcome ` +
-        '(status is not won, lost or no_response). They were scored but left out of training, ' +
+        '(status is not a settled outcome: converted, not converted, or no response). They were scored but left out of training, ' +
         'because counting an open lead as a failure teaches the model the wrong lesson.'
     );
   }
@@ -420,7 +420,7 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
 
   if (labels.length < MIN_ROWS_TO_TRAIN || positives < MIN_PER_CLASS || negatives < MIN_PER_CLASS) {
     warnings.push(
-      `Only ${positives} won and ${negatives} not-won leads have a settled outcome, which is too ` +
+      `Only ${positives} converted and ${negatives} not-converted leads have a settled outcome, which is too ` +
         'few to train on. Leads are ranked by a simple source-and-recency rule instead.'
     );
     return scoreWithoutTraining(rawLeads, features, labeledRows, labels, warnings);

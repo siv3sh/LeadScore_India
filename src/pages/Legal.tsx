@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, Mail, MapPin, Phone, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Mail, MapPin, Phone } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import { COMPANY, LEGAL_LINKS, formattedAddress, hasUnconfirmedDetails } from '@/lib/company';
 import { PLANS } from '@/types';
 
@@ -20,11 +21,8 @@ function LegalPage({ title, children }: { title: string; children: ReactNode }) 
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-3xl mx-auto px-5 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-teal-700 text-white flex items-center justify-center shrink-0">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-slate-900 text-sm truncate">{COMPANY.tradeName}</span>
+          <Link to="/" className="min-w-0">
+            <BrandLogo size={32} />
           </Link>
           <Link
             to="/"
@@ -158,7 +156,7 @@ export function TermsPage() {
         <p>
           You can stop using the service and delete your account at any time. Deleting your account
           removes your uploaded leads from our database. See the{' '}
-          <Link to="/refunds" className="text-teal-700 hover:underline">
+          <Link to="/refunds" className="text-blue-700 hover:underline">
             refunds and cancellation policy
           </Link>{' '}
           for what happens to a plan you have paid for.

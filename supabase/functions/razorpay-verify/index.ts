@@ -6,8 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
-const RAZORPAY_KEY_ID = Deno.env.get('RAZORPAY_KEY_ID') ?? '';
-const RAZORPAY_KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
@@ -23,11 +21,37 @@ const PLAN_AMOUNTS: Record<string, number> = {
 
 const PLAN_DURATION_DAYS = 30;
 
+type AdminClient = ReturnType<typeof createClient>;
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+/** Prefer Edge Function secrets; fall back to vault via private.get_razorpay_keys(). */
+async function resolveRazorpayKeys(
+  admin: AdminClient
+): Promise<{ keyId: string; keySecret: string } | null> {
+  const envId = Deno.env.get('RAZORPAY_KEY_ID') ?? '';
+  const envSecret = Deno.env.get('RAZORPAY_KEY_SECRET') ?? '';
+  if (envId && envSecret) {
+    return { keyId: envId, keySecret: envSecret };
+  }
+
+  // public.service_get_razorpay_keys is callable via PostgREST; private schema is not exposed.
+  const { data, error } = await admin.rpc('service_get_razorpay_keys');
+  if (error) {
+    return null;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  const keyId = row?.key_id ?? '';
+  const keySecret = row?.key_secret ?? '';
+  if (!keyId || !keySecret) {
+    return null;
+  }
+  return { keyId, keySecret };
 }
 
 Deno.serve(async (req: Request) => {
@@ -77,11 +101,12 @@ Deno.serve(async (req: Request) => {
 
     // Operational concern, checked only after the caller has been authenticated
     // and authorized for this workspace.
-    if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+    const keys = await resolveRazorpayKeys(admin);
+    if (!keys) {
       return json({ error: 'Razorpay keys not configured' }, 500);
     }
 
-    const auth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
+    const auth = btoa(`${keys.keyId}:${keys.keySecret}`);
     const verifyRes = await fetch(`https://api.razorpay.com/v1/payments/${payment_id}`, {
       headers: { Authorization: `Basic ${auth}` },
     });

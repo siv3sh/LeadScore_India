@@ -7,6 +7,11 @@ import {
   validateLeadsForScoring,
   type ColumnMapping,
 } from '@/lib/csvParser';
+import {
+  isSheetSyncUploadName,
+  SHEET_SYNC_FILE_PREFIX,
+  toGoogleSheetCsvExportUrl,
+} from '@/lib/googleSheet';
 
 export interface UploadResult {
   upload: Upload;
@@ -135,9 +140,166 @@ export async function fetchLeads(
   return data as Lead[];
 }
 
+/** Updates outreach fields on a single lead (status / last contact / snooze). */
+export async function updateLeadOutreach(
+  leadId: string,
+  patch: {
+    status?: string | null;
+    last_contacted_at?: string | null;
+    snoozed_until?: string | null;
+  }
+): Promise<void> {
+  const { error } = await supabase.from('leads').update(patch).eq('id', leadId);
+  if (error) throw error;
+}
+
 export async function deleteUpload(uploadId: string): Promise<void> {
   const { error } = await supabase.from('uploads').delete().eq('id', uploadId);
   if (error) throw error;
+}
+
+/** Removes previous google-sheet-sync uploads so re-sync replaces rows instead of stacking quota. */
+export async function deleteSheetSyncUploads(workspaceId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('uploads')
+    .select('id, file_name')
+    .eq('workspace_id', workspaceId);
+
+  if (error) throw error;
+
+  const ids = (data ?? [])
+    .filter((u) => isSheetSyncUploadName(u.file_name))
+    .map((u) => u.id);
+
+  for (const id of ids) {
+    await deleteUpload(id);
+  }
+}
+
+export async function fetchSheetCsvViaProxy(exportUrl: string): Promise<string> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error('Please sign in again to sync your Sheet.');
+  }
+
+  const base = import.meta.env.VITE_SUPABASE_URL;
+  const res = await fetch(`${base}/functions/v1/fetch-sheet-csv`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+      Apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ export_url: exportUrl }),
+  });
+
+  const body = (await res.json().catch(() => ({}))) as { csv_text?: string; error?: string };
+  if (!res.ok) {
+    throw new Error(body.error || `Sheet download failed (${res.status})`);
+  }
+  if (!body.csv_text?.trim()) {
+    throw new Error('Sheet download returned no data.');
+  }
+  return body.csv_text;
+}
+
+export async function saveWorkspaceSheetConnection(
+  workspaceId: string,
+  args: {
+    sheet_url: string;
+    sheet_mapping: ColumnMapping;
+    sheet_sync_enabled: boolean;
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from('workspaces')
+    .update({
+      sheet_url: args.sheet_url,
+      sheet_mapping: args.sheet_mapping,
+      sheet_sync_enabled: args.sheet_sync_enabled,
+      sheet_last_error: null,
+    })
+    .eq('id', workspaceId);
+
+  if (error) throw new Error(`Could not save Sheet connection: ${error.message}`);
+}
+
+export async function clearWorkspaceSheetConnection(workspaceId: string): Promise<void> {
+  const { error } = await supabase
+    .from('workspaces')
+    .update({
+      sheet_url: null,
+      sheet_mapping: null,
+      sheet_sync_enabled: false,
+      sheet_last_error: null,
+    })
+    .eq('id', workspaceId);
+
+  if (error) throw new Error(`Could not disconnect Sheet: ${error.message}`);
+}
+
+export async function markSheetSyncResult(
+  workspaceId: string,
+  result: { ok: true } | { ok: false; error: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('workspaces')
+    .update(
+      result.ok
+        ? { sheet_last_synced_at: new Date().toISOString(), sheet_last_error: null }
+        : { sheet_last_error: result.error.slice(0, 500) }
+    )
+    .eq('id', workspaceId);
+
+  if (error) {
+    // Non-fatal for the caller — sync itself already finished or failed.
+    console.error('Could not update sheet sync metadata', error.message);
+  }
+}
+
+/**
+ * Downloads the connected Sheet, replaces the previous sync upload, and re-scores.
+ * Requires a saved column mapping on the workspace.
+ */
+export async function syncWorkspaceGoogleSheet(
+  workspaceId: string,
+  sheetUrl: string,
+  mapping: ColumnMapping,
+  planLimit: number
+): Promise<UploadResult> {
+  const exportUrl = toGoogleSheetCsvExportUrl(sheetUrl);
+  const csvText = await fetchSheetCsvViaProxy(exportUrl);
+  const { rows } = parseCSV(csvText);
+  if (rows.length === 0) {
+    throw new Error('The Sheet has a header row but no lead rows yet.');
+  }
+
+  await deleteSheetSyncUploads(workspaceId);
+
+  const monthlyCount = await getMonthlyLeadCount(workspaceId);
+  if (monthlyCount + rows.length > planLimit) {
+    throw new Error(
+      `This Sheet has ${rows.length.toLocaleString('en-IN')} rows, which would exceed your plan limit (${planLimit.toLocaleString('en-IN')}/month). You've used ${monthlyCount.toLocaleString('en-IN')} this month.`
+    );
+  }
+
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  try {
+    const result = await processCSVUpload(
+      workspaceId,
+      `${SHEET_SYNC_FILE_PREFIX} ${stamp}.csv`,
+      csvText,
+      mapping
+    );
+    await markSheetSyncResult(workspaceId, { ok: true });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Sheet sync failed';
+    await markSheetSyncResult(workspaceId, { ok: false, error: message });
+    throw err;
+  }
 }
 
 export function exportLeadsToCSV(leads: Lead[]): string {

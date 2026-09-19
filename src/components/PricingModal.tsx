@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Check, Loader2, X } from 'lucide-react';
+import { AlertCircle, Check, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { getTrialState, TRIAL_DAYS } from '@/lib/trial';
 import { PLANS, getPlan, type PlanType } from '@/types';
 
-export default function PricingModal({ onClose }: { onClose: () => void }) {
+/**
+ * Plan picker + Razorpay checkout. Mounted from the profile Plans tab, not
+ * as a separate overlay.
+ */
+export default function PricingModal() {
   const { workspace, subscription, refreshWorkspace } = useAuth();
   const [loading, setLoading] = useState<PlanType | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +69,6 @@ export default function PricingModal({ onClose }: { onClose: () => void }) {
 
       await refreshWorkspace();
       setLoading(null);
-      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment verification failed');
       setLoading(null);
@@ -109,7 +112,7 @@ export default function PricingModal({ onClose }: { onClose: () => void }) {
       const options = {
         key: key_id,
         order_id,
-        name: 'LeadAI',
+        name: 'LeadScore',
         description: `${plan.name} Plan — ₹${plan.price.toLocaleString('en-IN')}/month`,
         // Server-derived, so the sheet can never show a different price to the
         // one the order was created for.
@@ -119,7 +122,7 @@ export default function PricingModal({ onClose }: { onClose: () => void }) {
           void verifyPayment(response.razorpay_payment_id, planId);
         },
         prefill: { name: workspace.name },
-        theme: { color: '#0f766e' },
+        theme: { color: '#2563EB' },
         modal: { ondismiss: () => setLoading(null) },
       };
 
@@ -137,87 +140,67 @@ export default function PricingModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-start justify-between px-7 pt-6 pb-2">
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Plans built for Indian teams</h2>
-            <p className="text-sm text-slate-500 mt-1">
-              All prices in INR, inclusive of GST. Pay securely via Razorpay — UPI, cards and netbanking.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition shrink-0 ml-4"
-            aria-label="Close pricing"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div>
+      {error && (
+        <div className="mb-4 flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{error}</span>
         </div>
+      )}
 
-        {error && (
-          <div className="mx-7 mt-3 flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
-            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-7">
-          {PLANS.map((plan) => {
-            const isCurrent = plan.id === currentPlan.id;
-            const isPopular = plan.id === 'growth';
-            return (
-              <div
-                key={plan.id}
-                className={`rounded-xl border p-5 flex flex-col ${
-                  isPopular ? 'border-teal-600 bg-teal-50/30 shadow-sm' : 'border-slate-200'
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {PLANS.map((plan) => {
+          const isCurrent = plan.id === currentPlan.id;
+          const isPopular = plan.id === 'growth';
+          return (
+            <div
+              key={plan.id}
+              className={`rounded-xl border p-4 flex flex-col ${isPopular ? 'border-blue-600 bg-blue-50/30 shadow-sm' : 'border-slate-200'
                 }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-slate-800">{plan.name}</h3>
-                  {isPopular && (
-                    <span className="text-[10px] font-bold tracking-wide text-white bg-indigo-500 rounded-full px-2 py-0.5">
-                      POPULAR
-                    </span>
-                  )}
-                </div>
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-slate-800">{plan.name}</h3>
+                {isPopular && (
+                  <span className="text-[10px] font-bold tracking-wide text-white bg-blue-500 rounded-full px-2 py-0.5">
+                    Recommended
+                  </span>
+                )}
+              </div>
 
-                <p className="text-2xl font-bold text-slate-900">₹{plan.price.toLocaleString('en-IN')}</p>
-                <p className="text-xs text-slate-400 mb-4">
-                  {plan.price === 0 ? freePlanCaption() : 'per month'}
-                </p>
+              <p className="text-xl font-bold text-slate-900">₹{plan.price.toLocaleString('en-IN')}</p>
+              <p className="text-xs text-slate-400 mb-3">
+                {plan.price === 0 ? freePlanCaption() : 'per month'}
+              </p>
 
-                <div className="text-xs text-slate-600 bg-slate-100 rounded-md px-2.5 py-1.5 mb-4 text-center">
-                  {plan.lead_limit.toLocaleString('en-IN')} leads / month
-                </div>
+              <div className="text-xs text-slate-600 bg-slate-100 rounded-md px-2.5 py-1.5 mb-3 text-center">
+                {plan.lead_limit.toLocaleString('en-IN')} leads / month
+              </div>
 
-                <ul className="space-y-2 mb-5 flex-1">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-xs text-slate-600">
-                      <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+              <ul className="space-y-1.5 mb-4 flex-1">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-start gap-2 text-xs text-slate-600">
+                    <Check className="w-3.5 h-3.5 text-green-600 mt-0.5 shrink-0" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
 
-                <button
-                  onClick={() => handleSubscribe(plan.id)}
-                  disabled={isCurrent || plan.id === 'free' || loading !== null}
-                  className={`w-full py-2.5 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${
-                    isCurrent
-                      ? 'bg-slate-100 text-slate-400 cursor-default'
-                      : plan.id === 'free'
+              <button
+                onClick={() => handleSubscribe(plan.id)}
+                disabled={isCurrent || plan.id === 'free' || loading !== null}
+                className={`w-full py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-2 ${isCurrent
+                    ? 'bg-slate-100 text-slate-400 cursor-default'
+                    : plan.id === 'free'
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       : 'bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-60'
                   }`}
-                >
-                  {loading === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {isCurrent ? 'Current plan' : plan.id === 'free' ? 'Included' : 'Choose plan'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+              >
+                {loading === plan.id && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isCurrent ? 'Current plan' : plan.id === 'free' ? 'Included' : 'Choose plan'}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

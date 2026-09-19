@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   PRIORITY_STYLES,
+  calendarDateKey,
+  dateFilterLabel,
+  formatCalendarDateLabel,
   formatINR,
   formatSource,
   formatStatus,
+  gridStatusAppearance,
+  isGridStatusActive,
+  leadArrivalDateKey,
+  leadMatchesDateFilter,
+  localDateKey,
+  monthCells,
+  monthLabel,
+  shiftLocalDateKey,
+  shiftYearMonth,
   telLink,
+  uniqueLeadDateKeys,
   whatsappNumber,
 } from './display';
 
@@ -39,7 +52,7 @@ describe('formatStatus', () => {
   it('styles the settled outcomes the model trains on', () => {
     expect(formatStatus('won').label).toBe('Converted');
     expect(formatStatus('lost').label).toBe('Not converted');
-    expect(formatStatus('no_response').label).toBe('No response');
+    expect(formatStatus('no_response').label).toBe('No answer');
   });
 
   it('styles the open pipeline stages a CRM exports', () => {
@@ -52,7 +65,7 @@ describe('formatStatus', () => {
   // Same separator normalisation as normalizeStatus in csvParser, so a CRM
   // exporting "No Response" is styled as the outcome rather than as unknown.
   it('normalises spaces and hyphens before matching', () => {
-    expect(formatStatus('No Response').label).toBe('No response');
+    expect(formatStatus('No Response').label).toBe('No answer');
     expect(formatStatus('Follow-Up').label).toBe('Follow-up');
     expect(formatStatus('  WON  ').label).toBe('Converted');
   });
@@ -63,8 +76,28 @@ describe('formatStatus', () => {
     expect(styled.className).toContain('slate');
   });
 
-  it('treats a missing status as open', () => {
-    expect(formatStatus(null).label).toBe('Open');
+  it('treats a missing or untouched status as New', () => {
+    expect(formatStatus(null).label).toBe('New');
+    expect(formatStatus('unknown').label).toBe('New');
+    expect(formatStatus('open').label).toBe('New');
+  });
+});
+
+describe('gridStatusAppearance', () => {
+  it('shows Tomorrow when an open lead is snoozed', () => {
+    const later = new Date(Date.now() + 60_000).toISOString();
+    expect(gridStatusAppearance('unknown', later).label).toBe('Tomorrow');
+  });
+
+  it('keeps Converted even if a snooze timestamp is still set', () => {
+    const later = new Date(Date.now() + 60_000).toISOString();
+    expect(gridStatusAppearance('won', later).label).toBe('Converted');
+  });
+
+  it('marks New as the active choice for an untouched lead', () => {
+    expect(isGridStatusActive('new', 'unknown', null)).toBe(true);
+    expect(isGridStatusActive('new', 'new', null)).toBe(true);
+    expect(isGridStatusActive('contacted', 'unknown', null)).toBe(false);
   });
 });
 
@@ -131,6 +164,82 @@ describe('telLink', () => {
     expect(telLink('n/a')).toBeNull();
     expect(telLink('')).toBeNull();
     expect(telLink(null)).toBeNull();
+  });
+});
+
+describe('lead arrival dates', () => {
+  it('uses the local calendar day, not UTC', () => {
+    const local = new Date(2026, 8, 19, 22, 15, 0);
+    expect(calendarDateKey(local.toISOString())).toBe(localDateKey(local));
+  });
+
+  it('prefers created_at_lead over the row insert time', () => {
+    expect(
+      leadArrivalDateKey({
+        created_at_lead: '2026-09-18T10:00:00.000Z',
+        created_at: '2026-09-20T10:00:00.000Z',
+      }),
+    ).toBe(calendarDateKey('2026-09-18T10:00:00.000Z'));
+  });
+
+  it('lists unique arrival days newest first', () => {
+    const keys = uniqueLeadDateKeys([
+      { created_at_lead: '2026-09-18T10:00:00.000Z', created_at: '2026-09-18T10:00:00.000Z' },
+      { created_at_lead: '2026-09-19T10:00:00.000Z', created_at: '2026-09-19T10:00:00.000Z' },
+      { created_at_lead: '2026-09-19T12:00:00.000Z', created_at: '2026-09-19T12:00:00.000Z' },
+    ]);
+    expect(keys[0] >= keys[1]).toBe(true);
+    expect(keys).toHaveLength(2);
+  });
+
+  it('labels a day the way a shop owner reads a calendar', () => {
+    expect(formatCalendarDateLabel('2026-09-19')).toMatch(/^19 Sept? 2026$/);
+  });
+
+  it('matches Today against the local day key', () => {
+    const today = localDateKey(new Date());
+    const lead = {
+      created_at_lead: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+    expect(leadMatchesDateFilter(lead, 'all', today)).toBe(true);
+    expect(leadMatchesDateFilter(lead, 'today', today)).toBe(true);
+    expect(leadMatchesDateFilter(lead, '1999-01-01', today)).toBe(false);
+  });
+
+  it('shifts a calendar key across a month boundary', () => {
+    expect(shiftLocalDateKey('2026-09-01', -1)).toBe('2026-08-31');
+    expect(shiftLocalDateKey('2026-08-31', 1)).toBe('2026-09-01');
+  });
+
+  it('treats Last 7 days as today plus the six days before', () => {
+    const today = '2026-09-20';
+    const leadOn = (ymd: string) => {
+      const [year, month, day] = ymd.split('-').map(Number);
+      const iso = new Date(year, month - 1, day, 12, 0, 0).toISOString();
+      return { created_at_lead: iso, created_at: iso };
+    };
+    expect(leadMatchesDateFilter(leadOn('2026-09-20'), '7d', today)).toBe(true);
+    expect(leadMatchesDateFilter(leadOn('2026-09-14'), '7d', today)).toBe(true);
+    expect(leadMatchesDateFilter(leadOn('2026-09-13'), '7d', today)).toBe(false);
+    expect(leadMatchesDateFilter(leadOn('2026-09-19'), 'yesterday', today)).toBe(true);
+    expect(leadMatchesDateFilter(leadOn('2026-08-22'), '30d', today)).toBe(true);
+    expect(leadMatchesDateFilter(leadOn('2026-08-21'), '30d', today)).toBe(false);
+  });
+
+  it('labels presets and a picked day for the toolbar', () => {
+    expect(dateFilterLabel('7d')).toBe('Last 7 days');
+    expect(dateFilterLabel('2026-09-19')).toMatch(/^19 Sept? 2026$/);
+  });
+
+  it('builds a Sunday-first month grid', () => {
+    const cells = monthCells(2026, 9);
+    expect(cells).toHaveLength(42);
+    expect(cells[0]).toEqual({ ymd: '2026-08-30', day: 30, inMonth: false });
+    expect(cells[2]).toEqual({ ymd: '2026-09-01', day: 1, inMonth: true });
+    expect(cells[31]).toEqual({ ymd: '2026-09-30', day: 30, inMonth: true });
+    expect(monthLabel(2026, 9)).toMatch(/September 2026/);
+    expect(shiftYearMonth(2026, 1, -1)).toEqual({ year: 2025, month: 12 });
   });
 });
 
