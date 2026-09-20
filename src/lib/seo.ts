@@ -94,6 +94,7 @@ export function applyRouteSeo(pathname: string): void {
   upsertMeta('property', 'og:title', seo.title);
   upsertMeta('property', 'og:description', seo.description);
   upsertMeta('property', 'og:url', `${SITE_URL}${path === '/' ? '' : path}`);
+  upsertMeta('property', 'og:image', `${SITE_URL}/og.jpg?v=2`);
   upsertMeta('name', 'twitter:title', seo.title);
   upsertMeta('name', 'twitter:description', seo.description);
   upsertLink('canonical', `${SITE_URL}${path === '/' ? '' : path}`);
