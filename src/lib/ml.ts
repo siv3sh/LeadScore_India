@@ -1,11 +1,13 @@
 import type { Priority } from '@/types';
 import { RESOLVED_STATUSES, SOURCES, type RawLead } from './csvParser';
+import { scoreLeadWithAiPlan, type AiRankingPlan } from './aiRanking';
 import {
   RANKING_SUMMARY,
   ageDaysFor,
-  detectIntentColumn,
+  aggregateIntent,
+  collectIntentAnswers,
+  detectIntentColumns,
   fallbackProbability,
-  parseIntentValue,
   scoreReason,
   type RankingMode,
 } from './ranking';
@@ -487,7 +489,7 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
     labels
   );
   const probabilities = features.map((vector) => predict(finalModel, vector));
-  const reasons = rankingReasons(rawLeads, referenceTime, 'trained', null);
+  const reasons = rankingReasons(rawLeads, referenceTime, 'trained', []);
 
   return {
     scoredLeads: buildScoredLeads(rawLeads, probabilities, reasons),
@@ -509,22 +511,25 @@ function rankingReasons(
   rawLeads: RawLead[],
   referenceTime: number,
   mode: RankingMode,
-  intentColumn: string | null
+  intentColumns: string[]
 ): string[] {
-  return rawLeads.map((lead) =>
-    scoreReason({
+  return rawLeads.map((lead) => {
+    const answers = collectIntentAnswers(lead.extra, intentColumns);
+    const yesCount = answers.filter((answer) => answer === 'yes').length;
+    return scoreReason({
       mode,
       source: lead.source,
       ageDays: ageDaysFor(lead, referenceTime),
       createdAt: lead.created_at,
-      intent: intentColumn ? parseIntentValue(lead.extra?.[intentColumn] ?? '') : null,
-    })
-  );
+      intent: aggregateIntent(answers),
+      yesCount,
+    });
+  });
 }
 
 /**
  * Fallback for files too small or too one-sided to fit anything. Ranks on
- * recency, source, and a recognised form-intent column when one exists.
+ * recency, source, and every recognised form-intent column when any exist.
  * Never touches `status` — scoring a lead on whether it already converted
  * is not a prediction.
  */
@@ -536,23 +541,25 @@ function scoreWithoutTraining(
   warnings: string[],
   referenceTime: number
 ): ScoringResult {
-  const intentColumn = detectIntentColumn(rawLeads);
-  const useIntent =
-    intentColumn !== null &&
-    rawLeads.some((lead) => parseIntentValue(lead.extra?.[intentColumn] ?? '') !== null);
+  const intentColumns = detectIntentColumns(rawLeads);
+  const useIntent = intentColumns.length > 0;
   const rankingMode: RankingMode = useIntent ? 'intent' : 'recency';
   warnings.push(RANKING_SUMMARY[rankingMode]);
 
   const probabilities = rawLeads.map((lead, i) => {
     const ageDays = Math.expm1(features[i][0]);
+    const answers = useIntent ? collectIntentAnswers(lead.extra, intentColumns) : [];
+    const intent = aggregateIntent(answers);
+    const yesCount = answers.filter((answer) => answer === 'yes').length;
     return fallbackProbability({
       ageDays,
       source: lead.source,
-      intent: useIntent && intentColumn ? parseIntentValue(lead.extra[intentColumn] ?? '') : null,
+      intent,
       useIntent,
+      extraYesCount: Math.max(0, yesCount - 1),
     });
   });
-  const reasons = rankingReasons(rawLeads, referenceTime, rankingMode, useIntent ? intentColumn : null);
+  const reasons = rankingReasons(rawLeads, referenceTime, rankingMode, useIntent ? intentColumns : []);
 
   const labeledProbabilities = labeledRows.map((i) => probabilities[i]);
   const evaluated =
@@ -573,5 +580,39 @@ function scoreWithoutTraining(
     warnings,
     rankingMode,
     rankingSummary: RANKING_SUMMARY[rankingMode],
+  };
+}
+
+/**
+ * Ranks with an AI-written column plan when the file has no converted history
+ * worth training on. The model only decides which answers matter; scoring itself
+ * stays deterministic and cheap per lead.
+ */
+export function scoreLeadsWithAiPlan(
+  rawLeads: RawLead[],
+  plan: AiRankingPlan,
+  priorWarnings: string[] = []
+): ScoringResult {
+  const referenceTime = referenceTimeFor(rawLeads);
+  const scored = rawLeads.map((lead) => scoreLeadWithAiPlan(lead, plan, referenceTime));
+  const probabilities = scored.map((row) => row.probability);
+  const reasons = scored.map((row) => row.reason);
+  const summary = plan.summary.trim() || RANKING_SUMMARY.ai;
+  const warnings = [...priorWarnings];
+  if (!warnings.includes(summary)) warnings.push(summary);
+
+  return {
+    scoredLeads: buildScoredLeads(rawLeads, probabilities, reasons),
+    metrics: {
+      auc: 0.5,
+      accuracy: 0,
+      precision: 0,
+      recall: 0,
+      trainSize: 0,
+      testSize: 0,
+    },
+    warnings,
+    rankingMode: 'ai',
+    rankingSummary: summary,
   };
 }

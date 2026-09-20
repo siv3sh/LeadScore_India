@@ -1528,7 +1528,7 @@ function UploadModal({
               <p className="mt-2 text-xs text-slate-400">
                 No fixed template. We auto-match name and phone, keep every other column, and you
                 pick what shows on the call list. A converted/not converted column is optional —
-                without it, ranking uses source and how recently the lead arrived.
+                without it, AI reads your form columns and ranks by buying interest, then how new.
               </p>
 
               <div className="mt-4 p-4 bg-slate-50 rounded-lg text-xs text-slate-500 space-y-2.5">
@@ -1694,9 +1694,9 @@ function StatusGuidance({
       )}
       {summary.wonCount === 0 && (
         <p className="text-amber-700">
-          Nothing is marked as converted. You can still upload — we&apos;ll rank by source and how
-          recently they arrived. Add converted / not converted later for a model trained on your
-          results.
+          Nothing is marked as converted. You can still upload — AI will read your form columns
+          and rank who to call first. Add converted / not converted later for a model trained on
+          your results.
         </p>
       )}
       {summary.wonCount > 0 && !hasNegatives && (

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Upload, Lead } from '@/types';
-import { scoreLeads, type TrainingMetrics } from '@/lib/ml';
+import { scoreLeads, scoreLeadsWithAiPlan, type TrainingMetrics } from '@/lib/ml';
+import { fetchAiRankingPlan } from '@/lib/fetchAiRankingPlan';
 import {
   collectExtraKeys,
   mapRowsToLeadsWithHeaders,
@@ -42,8 +43,19 @@ export async function processCSVUpload(
   }
   const warnings = [...validation.warnings];
 
-  const { scoredLeads, metrics, warnings: modelWarnings, rankingSummary } = scoreLeads(rawLeads);
-  warnings.push(...modelWarnings);
+  let scored = scoreLeads(rawLeads);
+
+  // When there is no converted history to train on, ask AI to read the form
+  // columns (meaning, not keywords). Falls back to local ranking if AI is down.
+  if (scored.rankingMode !== 'trained') {
+    const plan = await fetchAiRankingPlan(rawLeads);
+    if (plan) {
+      scored = scoreLeadsWithAiPlan(rawLeads, plan, validation.warnings);
+    }
+  }
+
+  const { scoredLeads, metrics, rankingSummary } = scored;
+  warnings.push(...scored.warnings);
 
   // Matches the model's target exactly, so the headline rate and the thing the
   // model predicts can never drift apart again.

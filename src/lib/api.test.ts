@@ -8,9 +8,17 @@ import { CSV_HEADER, csvWithStatuses } from './testFixtures';
  * because vi.mock is hoisted above the module body, so the spy has to exist
  * before this file's own declarations run.
  */
-const { fromMock } = vi.hoisted(() => ({ fromMock: vi.fn() }));
+const { fromMock, invokeMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
+  invokeMock: vi.fn(),
+}));
 
-vi.mock('@/lib/supabase', () => ({ supabase: { from: fromMock } }));
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    from: fromMock,
+    functions: { invoke: invokeMock },
+  },
+}));
 
 const { processCSVUpload } = await import('./api');
 
@@ -70,6 +78,9 @@ function installSupabaseMock(behaviour: Behaviour = {}) {
 
 beforeEach(() => {
   fromMock.mockReset();
+  invokeMock.mockReset();
+  // AI optional: default to unavailable so tests keep using local ranking.
+  invokeMock.mockResolvedValue({ data: null, error: { message: 'not configured' } });
 });
 
 describe('processCSVUpload scoring gate', () => {

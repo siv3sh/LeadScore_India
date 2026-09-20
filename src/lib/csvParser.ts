@@ -517,7 +517,7 @@ export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
 
   if (!leads.some((l) => l.status === 'won')) {
     warnings.push(
-      'No converted leads in this file, so ranking uses source and how recently they arrived — not your past wins. ' +
+      'No converted leads in this file, so ranking uses form answers and how recently they arrived — not your past wins. ' +
         'Add a converted / not converted column later if you want a model trained on your results.'
     );
   }

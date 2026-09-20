@@ -6,3 +6,6 @@ verify_jwt = true
 
 [functions.org-admin]
 verify_jwt = true
+
+[functions.understand-leads]
+verify_jwt = false
