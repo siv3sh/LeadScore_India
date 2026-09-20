@@ -11,6 +11,9 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 
+/** Prefer fast/cheap models; fall through when Google returns 503/high demand. */
+const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3-flash-preview'];
+
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -60,9 +63,13 @@ function extractJsonObject(text: string): unknown {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
-async function callGemini(userPayload: string): Promise<string> {
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGeminiModel(model: string, userPayload: string): Promise<string> {
   const url =
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent' +
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent` +
     `?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
   const res = await fetch(url, {
@@ -84,15 +91,36 @@ async function callGemini(userPayload: string): Promise<string> {
 
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(`Gemini error ${res.status}: ${detail.slice(0, 200)}`);
+    throw new Error(`Gemini ${model} ${res.status}: ${detail.slice(0, 240)}`);
   }
 
   const body = await res.json();
   const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (typeof text !== 'string' || !text.trim()) {
-    throw new Error('Gemini returned an empty response');
+    throw new Error(`Gemini ${model} returned an empty response`);
   }
   return text;
+}
+
+async function callGemini(userPayload: string): Promise<string> {
+  const errors: string[] = [];
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callGeminiModel(model, userPayload);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        errors.push(message);
+        const busy = /\b(503|429|UNAVAILABLE|high demand|RESOURCE_EXHAUSTED)\b/i.test(message);
+        if (busy && attempt === 0) {
+          await sleep(600);
+          continue;
+        }
+        break;
+      }
+    }
+  }
+  throw new Error(errors[errors.length - 1] ?? 'Gemini unavailable');
 }
 
 async function callOpenAI(userPayload: string): Promise<string> {
@@ -140,7 +168,7 @@ Deno.serve(async (req: Request) => {
         {
           gemini_configured: Boolean(GEMINI_API_KEY),
           openai_configured: Boolean(OPENAI_API_KEY),
-          model: 'gemini-3.6-flash',
+          model: GEMINI_MODELS[0],
         },
         200
       );

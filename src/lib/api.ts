@@ -48,9 +48,13 @@ export async function processCSVUpload(
   // When there is no converted history to train on, ask AI to read the form
   // columns (meaning, not keywords). Falls back to local ranking if AI is down.
   if (scored.rankingMode !== 'trained') {
-    const plan = await fetchAiRankingPlan(rawLeads);
+    const { plan, error: aiError } = await fetchAiRankingPlan(rawLeads);
     if (plan) {
       scored = scoreLeadsWithAiPlan(rawLeads, plan, validation.warnings);
+    } else if (aiError) {
+      warnings.push(
+        `AI ranking was busy or unavailable (${aiError}). Used form answers / recency instead — try upload again in a minute.`
+      );
     }
   }
 
