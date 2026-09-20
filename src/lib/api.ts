@@ -55,6 +55,13 @@ export async function processCSVUpload(
       warnings.push(
         `AI ranking was busy or unavailable (${aiError}). Used form answers / recency instead — try upload again in a minute.`
       );
+      // Keep the failure visible on the call-list banner, not only the upload modal.
+      scored = {
+        ...scored,
+        rankingSummary:
+          scored.rankingSummary +
+          ' AI was busy on this upload, so this pass used form answers instead.',
+      };
     }
   }
 
