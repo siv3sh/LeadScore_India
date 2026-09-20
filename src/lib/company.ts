@@ -15,7 +15,7 @@ export const COMPANY = {
   tradeName: 'LeadScore',
   /**
    * Prior public name — same product. Keep so people who received LeadAI links
-   * still recognize the brand; both leadai.* and leadscore.* host this app.
+   * still recognize the brand. Canonical host is leadscore.nuential.com.
    */
   formerTradeName: 'LeadAI',
   /**

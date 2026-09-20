@@ -3,5 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /login
 
-Sitemap: https://leadscore.sivesh-pb.com/sitemap.xml
-Sitemap: https://leadai.sivesh-pb.com/sitemap.xml
+Sitemap: https://leadscore.nuential.com/sitemap.xml

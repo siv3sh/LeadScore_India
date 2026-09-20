@@ -1,8 +1,7 @@
 import { COMPANY } from '@/lib/company';
 
-/** Primary public URL (brand). Keep leadai as an alternate that serves the same app. */
-export const SITE_URL = 'https://leadscore.sivesh-pb.com';
-export const SITE_URL_ALT = 'https://leadai.sivesh-pb.com';
+/** Primary public URL. */
+export const SITE_URL = 'https://leadscore.nuential.com';
 
 export const DEFAULT_TITLE =
   `${COMPANY.tradeName} India — Rank Google Sheet leads for WhatsApp & calls`;
