@@ -3,3 +3,6 @@ verify_jwt = true
 
 [functions.razorpay-verify]
 verify_jwt = true
+
+[functions.org-admin]
+verify_jwt = true

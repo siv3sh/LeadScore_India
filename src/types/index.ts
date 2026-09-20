@@ -1,6 +1,22 @@
+export type UserRole = 'super_admin' | 'org_admin' | 'org_user';
+export type OrgStatus = 'active' | 'inactive';
+
+export interface Organization {
+  id: string;
+  name: string;
+  seat_limit: number;
+  created_by: string | null;
+  created_at: string;
+  plan: string | null;
+  contact_email: string | null;
+  status: OrgStatus;
+  is_default: boolean;
+}
+
 export interface Workspace {
   id: string;
   user_id: string;
+  org_id: string | null;
   name: string;
   created_at: string;
   /** Google Sheets link the workspace syncs from (optional). */
@@ -21,6 +37,9 @@ export interface Profile {
   /** Snapshot taken at signup; the session's email is the live one. */
   email: string;
   is_admin: boolean;
+  org_id: string | null;
+  role: UserRole;
+  must_change_password: boolean;
   /** Public Storage URL. Null until the user uploads a photo. */
   avatar_url: string | null;
   created_at: string;
@@ -63,11 +82,14 @@ export type UploadStatus = 'processing' | 'completed' | 'failed';
 export interface Upload {
   id: string;
   workspace_id: string;
+  org_id: string | null;
   file_name: string;
   row_count: number;
   status: UploadStatus;
   model_auc: number | null;
   conversion_rate: number | null;
+  /** Why this batch is ordered this way. Absent on uploads scored before this existed. */
+  ranking_summary?: string | null;
   created_at: string;
 }
 
@@ -77,6 +99,7 @@ export interface Lead {
   id: string;
   upload_id: string;
   workspace_id: string;
+  org_id: string | null;
   lead_id: string | null;
   name: string | null;
   phone: string | null;
@@ -87,10 +110,14 @@ export interface Lead {
   order_value: number;
   num_orders: number;
   status: string | null;
+  /** Leftover CSV columns from this upload. Empty/absent on older rows. */
+  extra?: Record<string, string> | null;
   conversion_probability: number | null;
   score_0_100: number | null;
   priority: Priority | null;
   suggested_action: string | null;
+  /** One line on the card explaining this lead's place in the call order. */
+  score_reason?: string | null;
   /** When in the future, hide from Today's list until then. */
   snoozed_until: string | null;
   created_at: string;

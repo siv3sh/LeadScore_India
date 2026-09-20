@@ -2,8 +2,10 @@ import { supabase } from '@/lib/supabase';
 import type { Upload, Lead } from '@/types';
 import { scoreLeads, type TrainingMetrics } from '@/lib/ml';
 import {
+  collectExtraKeys,
   mapRowsToLeadsWithHeaders,
   parseCSV,
+  parseLeadExtra,
   validateLeadsForScoring,
   type ColumnMapping,
 } from '@/lib/csvParser';
@@ -40,7 +42,7 @@ export async function processCSVUpload(
   }
   const warnings = [...validation.warnings];
 
-  const { scoredLeads, metrics, warnings: modelWarnings } = scoreLeads(rawLeads);
+  const { scoredLeads, metrics, warnings: modelWarnings, rankingSummary } = scoreLeads(rawLeads);
   warnings.push(...modelWarnings);
 
   // Matches the model's target exactly, so the headline rate and the thing the
@@ -63,6 +65,7 @@ export async function processCSVUpload(
       status: 'completed',
       model_auc: metrics.auc,
       conversion_rate: conversionRate,
+      ranking_summary: rankingSummary,
     })
     .select()
     .single();
@@ -84,10 +87,12 @@ export async function processCSVUpload(
     order_value: lead.order_value,
     num_orders: lead.num_orders,
     status: lead.status,
+    extra: lead.extra ?? {},
     conversion_probability: lead.conversion_probability,
     score_0_100: lead.score_0_100,
     priority: lead.priority,
     suggested_action: lead.suggested_action,
+    score_reason: lead.score_reason,
   }));
 
   const BATCH_SIZE = 500;
@@ -325,8 +330,12 @@ export function exportLeadsToCSV(leads: Lead[]): string {
     return s;
   };
 
-  const rows = leads.map((l) =>
-    [
+  const extraKeys = collectExtraKeys(leads);
+  const allHeaders = [...headers, ...extraKeys];
+
+  const rows = leads.map((l) => {
+    const extra = parseLeadExtra(l.extra);
+    return [
       escapeVal(l.name),
       escapeVal(l.phone),
       escapeVal(l.city),
@@ -338,10 +347,11 @@ export function exportLeadsToCSV(leads: Lead[]): string {
       escapeVal(l.priority),
       escapeVal(l.suggested_action),
       escapeVal(l.conversion_probability?.toFixed(4)),
-    ].join(',')
-  );
+      ...extraKeys.map((key) => escapeVal(extra[key])),
+    ].join(',');
+  });
 
-  return [headers.join(','), ...rows].join('\n');
+  return [allHeaders.join(','), ...rows].join('\n');
 }
 
 export function downloadCSV(csv: string, fileName: string) {

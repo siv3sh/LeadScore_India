@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "migrate:org": "npx tsx scripts/migrate-org.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

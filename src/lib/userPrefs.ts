@@ -1,4 +1,5 @@
 import type { Priority } from '@/types';
+import { MAX_DISPLAY_EXTRAS, suggestDisplayExtras } from '@/lib/csvParser';
 
 export type ListFilters = {
   priority: 'all' | Priority;
@@ -31,6 +32,7 @@ type KeyValueStore = {
   setItem(key: string, value: string): void;
 };
 
+const DISPLAY_PREFIX = 'leadscore.display.';
 const FILTERS_PREFIX = 'leadscore.filters.';
 const STATUSES_PREFIX = 'leadscore.customStatuses.';
 
@@ -183,4 +185,58 @@ export function rememberCustomStatus(
   const next = [...current, entry];
   saveCustomStatuses(userId, next, store);
   return next;
+}
+
+export type ListDisplayPrefs = {
+  extraKeys: string[];
+  showSource: boolean;
+  showValue: boolean;
+  /** Once true, an empty extraKeys list means the user hid every extra on purpose. */
+  extrasConfigured: boolean;
+};
+
+export const DEFAULT_LIST_DISPLAY: ListDisplayPrefs = {
+  extraKeys: [],
+  showSource: true,
+  showValue: true,
+  extrasConfigured: false,
+};
+
+export function loadListDisplay(
+  userId: string,
+  store: KeyValueStore | null = browserStore(),
+): ListDisplayPrefs {
+  const raw = readJson(store, DISPLAY_PREFIX + userId);
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_LIST_DISPLAY };
+  const rec = raw as Record<string, unknown>;
+  const extraKeys = Array.isArray(rec.extraKeys)
+    ? rec.extraKeys.filter((key): key is string => typeof key === 'string' && key.trim().length > 0)
+        .slice(0, MAX_DISPLAY_EXTRAS)
+    : [];
+  return {
+    extraKeys,
+    showSource: typeof rec.showSource === 'boolean' ? rec.showSource : DEFAULT_LIST_DISPLAY.showSource,
+    showValue: typeof rec.showValue === 'boolean' ? rec.showValue : DEFAULT_LIST_DISPLAY.showValue,
+    extrasConfigured: rec.extrasConfigured === true,
+  };
+}
+
+export function saveListDisplay(
+  userId: string,
+  prefs: ListDisplayPrefs,
+  store: KeyValueStore | null = browserStore(),
+): void {
+  writeJson(store, DISPLAY_PREFIX + userId, {
+    extraKeys: prefs.extraKeys.slice(0, MAX_DISPLAY_EXTRAS),
+    showSource: prefs.showSource,
+    showValue: prefs.showValue,
+    extrasConfigured: prefs.extrasConfigured,
+  });
+}
+
+export function visibleExtraKeys(available: string[], prefs: ListDisplayPrefs): string[] {
+  if (prefs.extrasConfigured) {
+    return prefs.extraKeys.filter((key) => available.includes(key)).slice(0, MAX_DISPLAY_EXTRAS);
+  }
+  return suggestDisplayExtras(available);
 }

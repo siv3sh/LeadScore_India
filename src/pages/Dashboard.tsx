@@ -25,6 +25,7 @@ import {
   ChevronDown,
   Languages,
   RotateCcw,
+  Columns3,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
@@ -45,10 +46,14 @@ import {
   generateSampleCSV,
   generateTemplateCSV,
   summarizeStatuses,
-  RESOLVED_STATUSES,
-  REQUIRED_COLUMNS,
-  OPTIONAL_COLUMNS,
+  unmappedHeaders,
+  suggestDisplayExtras,
+  collectExtraKeys,
+  parseLeadExtra,
+  formatExtraLabel,
+  MAPPING_FIELDS,
   SOURCES,
+  MAX_DISPLAY_EXTRAS,
   type ColumnMapping,
 } from '@/lib/csvParser';
 import { readUploadAsCsv } from '@/lib/spreadsheet';
@@ -88,15 +93,20 @@ import {
   type WaTemplateId,
 } from '@/lib/outreach';
 import {
+  DEFAULT_LIST_DISPLAY,
   DEFAULT_LIST_FILTERS,
   filtersAreDefault,
   loadCustomStatuses,
+  loadListDisplay,
   loadListFilters,
   parseCustomStatusLabel,
   rememberCustomStatus,
+  saveListDisplay,
   saveListFilters,
+  visibleExtraKeys,
   CUSTOM_STATUS_MAX_LEN,
   type CustomStatus,
+  type ListDisplayPrefs,
 } from '@/lib/userPrefs';
 import { shouldAutoSyncSheet } from '@/lib/googleSheet';
 import { formatTrialEnd, getTrialState } from '@/lib/trial';
@@ -138,6 +148,7 @@ export default function Dashboard() {
   const [outreachLang, setOutreachLang] = useState<OutreachLang>(() => loadOutreachLang());
   const [waTemplate, setWaTemplate] = useState<WaTemplateId>('follow_up');
   const [copyNote, setCopyNote] = useState<string | null>(null);
+  const [listDisplay, setListDisplay] = useState<ListDisplayPrefs>(DEFAULT_LIST_DISPLAY);
   const plan = getPlan(subscription?.plan ?? 'free');
   const trial = getTrialState(subscription);
 
@@ -180,6 +191,7 @@ export default function Dashboard() {
     setScoreFirst(saved.scoreFirst);
     setDateFilter(saved.date);
     setCustomStatuses(loadCustomStatuses(userId));
+    setListDisplay(loadListDisplay(userId));
     setFiltersHydrated(true);
   }, [user?.id]);
 
@@ -194,6 +206,12 @@ export default function Dashboard() {
       date: dateFilter,
     });
   }, [user?.id, filtersHydrated, priorityFilter, sourceFilter, statusFilter, scoreFirst, dateFilter]);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId || !filtersHydrated) return;
+    saveListDisplay(userId, listDisplay);
+  }, [user?.id, filtersHydrated, listDisplay]);
 
   function resetFilters() {
     setPriorityFilter(DEFAULT_LIST_FILTERS.priority);
@@ -292,7 +310,8 @@ export default function Dashboard() {
       }
       if (!leadMatchesDateFilter(l, dateFilter, todayKey)) return false;
       if (query) {
-        const haystack = [l.name, l.phone, l.city, l.lead_id]
+        const extra = parseLeadExtra(l.extra);
+        const haystack = [l.name, l.phone, l.city, l.lead_id, ...Object.values(extra)]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
@@ -458,6 +477,17 @@ export default function Dashboard() {
   }
 
   const filteredLeads = getFilteredLeads();
+  const availableExtras = collectExtraKeys(leads);
+  const shownExtras = visibleExtraKeys(availableExtras, listDisplay);
+
+  function toggleDisplayExtra(key: string) {
+    const current = visibleExtraKeys(availableExtras, listDisplay);
+    const next = current.includes(key)
+      ? current.filter((item) => item !== key)
+      : [...current, key].slice(0, MAX_DISPLAY_EXTRAS);
+    setListDisplay({ ...listDisplay, extraKeys: next, extrasConfigured: true });
+  }
+
   const sources = Array.from(new Set(leads.map((l) => l.source).filter(Boolean))) as string[];
   const todayKey = localDateKey(new Date());
   // Selections survive a filter change, but only visible ones are exported, so
@@ -512,7 +542,7 @@ export default function Dashboard() {
               />
               <input
                 type="search"
-                placeholder="Search name, phone, city…"
+                placeholder="Search name, phone, city, extra fields…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="search-header"
@@ -746,7 +776,8 @@ export default function Dashboard() {
             </div>
             <h3 className="text-base font-semibold text-slate-800 mb-1">No leads yet</h3>
             <p className="text-sm text-slate-500 mb-4">
-              Upload a CSV/Excel file, connect a live Google Sheet, or paste rows from Sheets.
+              Upload any CSV or Excel — Instagram ads, Sheets, WhatsApp exports. We match the
+              columns; you pick what shows on the list.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button onClick={() => setShowUploadModal(true)} className="btn-primary inline-flex items-center gap-2">
@@ -765,10 +796,48 @@ export default function Dashboard() {
         ) : (
           <div id="call-list" className="card scroll-mt-20">
             <div className="p-4 flex flex-col gap-3 border-b border-slate-100">
+              {selectedUpload?.ranking_summary ? (
+                <p className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">
+                  {selectedUpload.ranking_summary}
+                </p>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <ScoreFirstToggle on={scoreFirst} onChange={setScoreFirst} />
 
                 <div className="ml-auto flex items-center gap-1.5">
+                  <MenuDropdown
+                    ariaLabel="Columns on this list"
+                    triggerClassName="select-toolbar px-2 sm:px-3"
+                    trigger={
+                      <>
+                        <Columns3 className="w-3.5 h-3.5 text-slate-500" />
+                        <span className="hidden sm:inline">Columns</span>
+                        <ChevronDown className="hidden sm:inline w-3.5 h-3.5 text-slate-400" />
+                      </>
+                    }
+                    items={[
+                      {
+                        id: 'col-source',
+                        label: 'Source',
+                        active: listDisplay.showSource,
+                        onSelect: () =>
+                          setListDisplay({ ...listDisplay, showSource: !listDisplay.showSource }),
+                      },
+                      {
+                        id: 'col-value',
+                        label: 'Order value',
+                        active: listDisplay.showValue,
+                        onSelect: () =>
+                          setListDisplay({ ...listDisplay, showValue: !listDisplay.showValue }),
+                      },
+                      ...availableExtras.map((key) => ({
+                        id: `col-extra-${key}`,
+                        label: formatExtraLabel(key),
+                        active: shownExtras.includes(key),
+                        onSelect: () => toggleDisplayExtra(key),
+                      })),
+                    ]}
+                  />
                   <button
                     type="button"
                     onClick={resetFilters}
@@ -941,6 +1010,9 @@ export default function Dashboard() {
                       customStatuses={customStatuses}
                       waTemplate={waTemplate}
                       outreachLang={outreachLang}
+                      showSource={listDisplay.showSource}
+                      showValue={listDisplay.showValue}
+                      extraKeys={shownExtras}
                       onSetGridStatus={setGridStatus}
                       onApplyCustom={applyCustomGridStatus}
                       onAddCustom={addCustomGridStatus}
@@ -968,8 +1040,17 @@ export default function Dashboard() {
                         <th className="px-2 py-3 font-medium min-w-[190px]">Lead</th>
                         <th className="px-3 py-3 font-medium">Score</th>
                         <th className="px-3 py-3 font-medium">Priority</th>
-                        <th className="px-3 py-3 font-medium">Source</th>
-                        <th className="px-3 py-3 font-medium text-right">Value</th>
+                        {listDisplay.showSource && (
+                          <th className="px-3 py-3 font-medium">Source</th>
+                        )}
+                        {shownExtras.map((key) => (
+                          <th key={key} className="px-3 py-3 font-medium whitespace-nowrap">
+                            {formatExtraLabel(key)}
+                          </th>
+                        ))}
+                        {listDisplay.showValue && (
+                          <th className="px-3 py-3 font-medium text-right">Value</th>
+                        )}
                         <th className="px-3 py-3 font-medium">Status</th>
                         <th className="px-3 py-3 font-medium text-right pr-4">Outreach</th>
                       </tr>
@@ -1015,6 +1096,11 @@ export default function Dashboard() {
                                   />
                                 </div>
                               </div>
+                              {lead.score_reason ? (
+                                <p className="mt-1 text-[11px] text-slate-500 leading-snug max-w-[14rem]">
+                                  {lead.score_reason}
+                                </p>
+                              ) : null}
                             </td>
                             <td className="px-3 py-3">
                               <span
@@ -1024,12 +1110,24 @@ export default function Dashboard() {
                                 {PRIORITY_STYLES[priority].label}
                               </span>
                             </td>
-                            <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
-                              {formatSource(lead.source)}
-                            </td>
-                            <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
-                              {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
-                            </td>
+                            {listDisplay.showSource && (
+                              <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
+                                {formatSource(lead.source)}
+                              </td>
+                            )}
+                            {shownExtras.map((key) => (
+                              <td
+                                key={key}
+                                className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap max-w-[160px] truncate"
+                              >
+                                {parseLeadExtra(lead.extra)[key] || '—'}
+                              </td>
+                            ))}
+                            {listDisplay.showValue && (
+                              <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
+                                {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
+                              </td>
+                            )}
                             <td className="px-3 py-3">
                               <LeadStatusMenu
                                 lead={lead}
@@ -1113,10 +1211,12 @@ export default function Dashboard() {
       {showUploadModal && (
         <UploadModal
           workspaceId={workspace.id}
+          userId={user?.id ?? ''}
           planLimit={plan.lead_limit}
           onClose={() => setShowUploadModal(false)}
           onSuccess={async () => {
             setShowUploadModal(false);
+            if (user?.id) setListDisplay(loadListDisplay(user.id));
             await loadData();
             await refreshWorkspace();
           }}
@@ -1164,11 +1264,13 @@ function StatCard({
 
 function UploadModal({
   workspaceId,
+  userId,
   planLimit,
   onClose,
   onSuccess,
 }: {
   workspaceId: string;
+  userId: string;
   planLimit: number;
   onClose: () => void;
   onSuccess: () => void;
@@ -1187,6 +1289,12 @@ function UploadModal({
   const [readingFile, setReadingFile] = useState(false);
   const [sheetNotice, setSheetNotice] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState('');
+  const [extraSelected, setExtraSelected] = useState<string[]>([]);
+
+  function applyGuessedMapping(next: ColumnMapping, fileHeaders: string[]) {
+    setMapping(next);
+    setExtraSelected(suggestDisplayExtras(unmappedHeaders(fileHeaders, next)));
+  }
 
   function goToMapping(text: string, name: string, notice: string | null = null) {
     const parsed = parseCSV(text);
@@ -1198,11 +1306,20 @@ function UploadModal({
     }
     setHeaders(parsed.headers);
     setRows(parsed.rows);
-    setMapping(guessColumnMapping(parsed.headers));
+    applyGuessedMapping(guessColumnMapping(parsed.headers), parsed.headers);
     setCsvText(text);
     setFileName(name);
     setSheetNotice(notice);
     setStep('mapping');
+  }
+
+  function updateMapping(next: ColumnMapping) {
+    const leftover = unmappedHeaders(headers, next);
+    setMapping(next);
+    setExtraSelected((current) => {
+      const kept = current.filter((key) => leftover.includes(key));
+      return kept.length > 0 ? kept : suggestDisplayExtras(leftover);
+    });
   }
 
   function handlePasteFromSheet() {
@@ -1259,6 +1376,10 @@ function UploadModal({
 
   async function handleProcess() {
     if (!mapping) return;
+    if (!mapping.name || !mapping.phone) {
+      setError('Map Name and Phone so the call list has someone to contact.');
+      return;
+    }
     setStep('processing');
     setError(null);
 
@@ -1273,6 +1394,14 @@ function UploadModal({
       }
 
       const res = await processCSVUpload(workspaceId, fileName, csvText, mapping);
+      if (userId) {
+        const current = loadListDisplay(userId);
+        saveListDisplay(userId, {
+          ...current,
+          extraKeys: extraSelected.slice(0, MAX_DISPLAY_EXTRAS),
+          extrasConfigured: true,
+        });
+      }
       setResult(res);
       setTimeout(onSuccess, 1500);
     } catch (err) {
@@ -1336,10 +1465,11 @@ function UploadModal({
                   <>
                     <UploadIcon className="w-10 h-10 text-slate-400 mx-auto mb-3" />
                     <p className="text-sm font-medium text-slate-700">
-                      Drop your CSV or Excel file here, or click to browse
+                      Drop any CSV or Excel file — we match the columns for you
                     </p>
                     <p className="text-xs text-slate-400 mt-1">
-                      .csv, .xlsx or .xls — up to {planLimit.toLocaleString('en-IN')} leads
+                      Instagram ads, Google Sheets, WhatsApp exports all work. Up to{' '}
+                      {planLimit.toLocaleString('en-IN')} leads
                     </p>
                   </>
                 )}
@@ -1396,33 +1526,28 @@ function UploadModal({
                 </button>
               </div>
               <p className="mt-2 text-xs text-slate-400">
-                The template is the column headers on their own — add your leads underneath, using
-                the values listed below. The sample is filled with demo leads if you just want to
-                see how scoring works.
+                No fixed template. We auto-match name and phone, keep every other column, and you
+                pick what shows on the call list. A converted/not converted column is optional —
+                without it, ranking uses source and how recently the lead arrived.
               </p>
 
               <div className="mt-4 p-4 bg-slate-50 rounded-lg text-xs text-slate-500 space-y-2.5">
                 <div>
-                  <p className="font-medium text-slate-600 mb-0.5">Required columns</p>
-                  <p>{REQUIRED_COLUMNS.join(', ')}</p>
+                  <p className="font-medium text-slate-600 mb-0.5">Needed to call</p>
+                  <p>Name and phone — we look for these automatically, whatever they are titled.</p>
                 </div>
                 <div>
-                  <p className="font-medium text-slate-600 mb-0.5">Optional columns</p>
-                  <p>{OPTIONAL_COLUMNS.join(', ')}</p>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-600 mb-0.5">Accepted source values</p>
-                  <p>{SOURCES.join(', ')} — any other value is ignored when scoring</p>
-                </div>
-                <div>
-                  <p className="font-medium text-slate-600 mb-0.5">Accepted status values</p>
+                  <p className="font-medium text-slate-600 mb-0.5">Helps ranking (optional)</p>
                   <p>
-                    Settled outcomes the model learns from:{' '}
-                    <span className="font-medium">converted</span>,{' '}
-                    <span className="font-medium">not converted</span>, and{' '}
-                    <span className="font-medium">no response</span> (CSV values:{' '}
-                    {RESOLVED_STATUSES.join(', ')}). At least one converted lead is required. Open
-                    stages such as new, contacted, or unknown are scored but not used for training.
+                    Source ({SOURCES.join(', ')}) and created date. Converted / not converted / no
+                    response trains a model on your results; Instagram ads files usually skip this.
+                  </p>
+                </div>
+                <div>
+                  <p className="font-medium text-slate-600 mb-0.5">Everything else</p>
+                  <p>
+                    Email, campaign, form answers, city — stored with the lead. Tick what you want
+                    on today&apos;s list after upload.
                   </p>
                 </div>
               </div>
@@ -1438,21 +1563,34 @@ function UploadModal({
                 </div>
               )}
               <p className="text-sm text-slate-600 mb-4">
-                Map your columns to LeadScore fields. We've auto-detected the mapping — adjust if needed.
+                We matched what we could in this file. Name and phone are enough to build a call
+                list — tick extra columns to show while calling.
               </p>
               <div className="space-y-3">
-                <MappingField label="Name" value={mapping.name} headers={headers} onChange={(v) => setMapping({ ...mapping, name: v })} required />
-                <MappingField label="Phone" value={mapping.phone} headers={headers} onChange={(v) => setMapping({ ...mapping, phone: v })} required />
-                <MappingField label="Source" value={mapping.source} headers={headers} onChange={(v) => setMapping({ ...mapping, source: v })} required />
-                <MappingField label="Created At" value={mapping.created_at} headers={headers} onChange={(v) => setMapping({ ...mapping, created_at: v })} required />
-                <MappingField label="Order Value" value={mapping.order_value} headers={headers} onChange={(v) => setMapping({ ...mapping, order_value: v })} required />
-                <MappingField label="Num Orders" value={mapping.num_orders} headers={headers} onChange={(v) => setMapping({ ...mapping, num_orders: v })} required />
-                <MappingField label="Status" value={mapping.status} headers={headers} onChange={(v) => setMapping({ ...mapping, status: v })} required />
-                <StatusGuidance headers={headers} rows={rows} statusColumn={mapping.status} />
-                <MappingField label="City (optional)" value={mapping.city ?? ''} headers={headers} onChange={(v) => setMapping({ ...mapping, city: v || undefined })} />
-                <MappingField label="Lead ID (optional)" value={mapping.lead_id ?? ''} headers={headers} onChange={(v) => setMapping({ ...mapping, lead_id: v || undefined })} />
-                <MappingField label="Last Contacted (optional)" value={mapping.last_contacted_at ?? ''} headers={headers} onChange={(v) => setMapping({ ...mapping, last_contacted_at: v || undefined })} />
+                {MAPPING_FIELDS.map((field) => (
+                  <div key={field.key}>
+                    <MappingField
+                      label={field.label}
+                      value={mapping[field.key] ?? ''}
+                      headers={headers}
+                      onChange={(v) => updateMapping({ ...mapping, [field.key]: v || undefined })}
+                      required={field.required}
+                    />
+                    {field.key === 'status' ? (
+                      <StatusGuidance
+                        headers={headers}
+                        rows={rows}
+                        statusColumn={mapping.status}
+                      />
+                    ) : null}
+                  </div>
+                ))}
               </div>
+              <ExtraColumnPicker
+                leftover={unmappedHeaders(headers, mapping)}
+                selected={extraSelected}
+                onChange={setExtraSelected}
+              />
               <div className="flex flex-col-reverse sm:flex-row gap-3 mt-6">
                 <button onClick={() => setStep('upload')} className="btn-secondary">
                   Back
@@ -1531,7 +1669,7 @@ function StatusGuidance({
 }: {
   headers: string[];
   rows: string[][];
-  statusColumn: string;
+  statusColumn: string | undefined;
 }) {
   const summary = summarizeStatuses(headers, rows, statusColumn);
   if (summary.trainable.length === 0 && summary.open.length === 0) return null;
@@ -1556,10 +1694,9 @@ function StatusGuidance({
       )}
       {summary.wonCount === 0 && (
         <p className="text-amber-700">
-          Nothing is marked as converted, so there is no outcome to learn. Map a column that
-          includes converted leads, or set those rows to{' '}
-          <span className="font-medium">converted</span> / CSV value{' '}
-          <span className="font-medium">won</span> before uploading.
+          Nothing is marked as converted. You can still upload — we&apos;ll rank by source and how
+          recently they arrived. Add converted / not converted later for a model trained on your
+          results.
         </p>
       )}
       {summary.wonCount > 0 && !hasNegatives && (
@@ -1790,6 +1927,9 @@ function LeadMobileCard({
   customStatuses,
   waTemplate,
   outreachLang,
+  showSource,
+  showValue,
+  extraKeys,
   onSetGridStatus,
   onApplyCustom,
   onAddCustom,
@@ -1801,12 +1941,27 @@ function LeadMobileCard({
   customStatuses: CustomStatus[];
   waTemplate: WaTemplateId;
   outreachLang: OutreachLang;
+  showSource: boolean;
+  showValue: boolean;
+  extraKeys: string[];
   onSetGridStatus: (leadId: string, value: GridStatusValue) => void;
   onApplyCustom: (leadId: string, slug: string) => void;
   onAddCustom: (leadId: string, raw: string) => string | null;
   onContact: (leadId: string) => void;
 }) {
   const priority = lead.priority ?? 'low';
+  const extra = parseLeadExtra(lead.extra);
+  const extraBits = extraKeys
+    .map((key) => {
+      const value = extra[key];
+      return value ? `${formatExtraLabel(key)}: ${value}` : null;
+    })
+    .filter((bit): bit is string => Boolean(bit));
+  const meta = [
+    showSource ? formatSource(lead.source) : null,
+    showValue && lead.order_value > 0 ? formatINR(lead.order_value) : null,
+    ...extraBits,
+  ].filter(Boolean);
   return (
     <li className="px-4 py-3.5">
       <div className="flex items-start gap-3">
@@ -1844,11 +1999,15 @@ function LeadMobileCard({
                 <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
                 {PRIORITY_STYLES[priority].label}
               </span>
+              {lead.score_reason ? (
+                <p className="mt-1 text-[10px] text-slate-500 leading-snug max-w-[9.5rem]">
+                  {lead.score_reason}
+                </p>
+              ) : null}
             </div>
           </div>
           <p className="mt-1.5 text-[11px] text-slate-500 truncate">
-            {formatSource(lead.source)}
-            {lead.order_value > 0 ? ` · ${formatINR(lead.order_value)}` : ''}
+            {meta.length > 0 ? meta.join(' · ') : ' '}
           </p>
           <div className="mt-2.5">
             <LeadStatusMenu
@@ -1951,6 +2110,70 @@ function ToolbarFilter({
         onSelect: () => onChange(option.value),
       }))}
     />
+  );
+}
+
+function ExtraColumnPicker({
+  leftover,
+  selected,
+  onChange,
+}: {
+  leftover: string[];
+  selected: string[];
+  onChange: (keys: string[]) => void;
+}) {
+  if (leftover.length === 0) {
+    return (
+      <p className="mt-4 text-xs text-slate-500">
+        Every column in this file was matched to a scoring field.
+      </p>
+    );
+  }
+
+  function toggle(key: string) {
+    if (selected.includes(key)) {
+      onChange(selected.filter((item) => item !== key));
+      return;
+    }
+    if (selected.length >= MAX_DISPLAY_EXTRAS) return;
+    onChange([...selected, key]);
+  }
+
+  return (
+    <div className="mt-5 rounded-lg border border-slate-200 p-3 space-y-2">
+      <p className="text-sm font-medium text-slate-700">Show on today&apos;s list</p>
+      <p className="text-xs text-slate-500">
+        Extra columns stay with each lead. Tick up to {MAX_DISPLAY_EXTRAS} that your team needs
+        while calling — you can change this later from Columns.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {leftover.map((key) => {
+          const checked = selected.includes(key);
+          const blocked = !checked && selected.length >= MAX_DISPLAY_EXTRAS;
+          return (
+            <label
+              key={key}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs ${
+                checked
+                  ? 'border-blue-200 bg-blue-50 text-blue-800'
+                  : blocked
+                    ? 'border-slate-100 text-slate-300'
+                    : 'border-slate-200 text-slate-600'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={blocked}
+                onChange={() => toggle(key)}
+                className="rounded border-slate-300"
+              />
+              {formatExtraLabel(key)}
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

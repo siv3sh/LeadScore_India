@@ -1,11 +1,22 @@
 import type { Priority } from '@/types';
 import { RESOLVED_STATUSES, SOURCES, type RawLead } from './csvParser';
+import {
+  RANKING_SUMMARY,
+  ageDaysFor,
+  detectIntentColumn,
+  fallbackProbability,
+  parseIntentValue,
+  scoreReason,
+  type RankingMode,
+} from './ranking';
 
 export interface ScoredLead extends RawLead {
   conversion_probability: number;
   score_0_100: number;
   priority: Priority;
   suggested_action: string;
+  /** Plain-language why this lead sits where it does on the call list. */
+  score_reason: string;
 }
 
 export interface TrainingMetrics {
@@ -25,6 +36,8 @@ export interface ScoringResult {
   scoredLeads: ScoredLead[];
   metrics: TrainingMetrics;
   warnings: string[];
+  rankingMode: RankingMode;
+  rankingSummary: string;
 }
 
 /**
@@ -364,7 +377,8 @@ function suggestedActionFor(priority: Priority): string {
 
 function buildScoredLeads(
   rawLeads: RawLead[],
-  probabilities: number[]
+  probabilities: number[],
+  reasons: string[]
 ): ScoredLead[] {
   const priorities = assignPriorities(probabilities);
   return rawLeads.map((lead, i) => ({
@@ -373,6 +387,7 @@ function buildScoredLeads(
     score_0_100: Math.round(probabilities[i] * 100),
     priority: priorities[i],
     suggested_action: suggestedActionFor(priorities[i]),
+    score_reason: reasons[i] ?? '',
   }));
 }
 
@@ -398,7 +413,7 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
   }
 
   const unlabeledCount = rawLeads.length - labeledRows.length;
-  if (unlabeledCount > 0) {
+  if (unlabeledCount > 0 && labeledRows.length > 0) {
     warnings.push(
       `${unlabeledCount} lead${unlabeledCount === 1 ? '' : 's'} have no settled outcome ` +
         '(status is not a settled outcome: converted, not converted, or no response). They were scored but left out of training, ' +
@@ -419,11 +434,7 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
   }
 
   if (labels.length < MIN_ROWS_TO_TRAIN || positives < MIN_PER_CLASS || negatives < MIN_PER_CLASS) {
-    warnings.push(
-      `Only ${positives} converted and ${negatives} not-converted leads have a settled outcome, which is too ` +
-        'few to train on. Leads are ranked by a simple source-and-recency rule instead.'
-    );
-    return scoreWithoutTraining(rawLeads, features, labeledRows, labels, warnings);
+    return scoreWithoutTraining(rawLeads, features, labeledRows, labels, warnings, referenceTime);
   }
 
   // Three folds past a few thousand rows keeps a 50k upload inside a couple of
@@ -476,9 +487,10 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
     labels
   );
   const probabilities = features.map((vector) => predict(finalModel, vector));
+  const reasons = rankingReasons(rawLeads, referenceTime, 'trained', null);
 
   return {
-    scoredLeads: buildScoredLeads(rawLeads, probabilities),
+    scoredLeads: buildScoredLeads(rawLeads, probabilities, reasons),
     metrics: {
       auc,
       accuracy: sliceMetrics.accuracy,
@@ -488,31 +500,59 @@ export function scoreLeads(rawLeads: RawLead[]): ScoringResult {
       testSize: labels.length,
     },
     warnings,
+    rankingMode: 'trained',
+    rankingSummary: RANKING_SUMMARY.trained,
   };
 }
 
+function rankingReasons(
+  rawLeads: RawLead[],
+  referenceTime: number,
+  mode: RankingMode,
+  intentColumn: string | null
+): string[] {
+  return rawLeads.map((lead) =>
+    scoreReason({
+      mode,
+      source: lead.source,
+      ageDays: ageDaysFor(lead, referenceTime),
+      createdAt: lead.created_at,
+      intent: intentColumn ? parseIntentValue(lead.extra?.[intentColumn] ?? '') : null,
+    })
+  );
+}
+
 /**
- * Fallback for files too small or too one-sided to fit anything. Ranks on the
- * two signals that need no training, and never touches `status` — scoring a
- * lead partly on whether it already converted is not a prediction.
+ * Fallback for files too small or too one-sided to fit anything. Ranks on
+ * recency, source, and a recognised form-intent column when one exists.
+ * Never touches `status` — scoring a lead on whether it already converted
+ * is not a prediction.
  */
 function scoreWithoutTraining(
   rawLeads: RawLead[],
   features: number[][],
   labeledRows: number[],
   labels: number[],
-  warnings: string[]
+  warnings: string[],
+  referenceTime: number
 ): ScoringResult {
+  const intentColumn = detectIntentColumn(rawLeads);
+  const useIntent =
+    intentColumn !== null &&
+    rawLeads.some((lead) => parseIntentValue(lead.extra?.[intentColumn] ?? '') !== null);
+  const rankingMode: RankingMode = useIntent ? 'intent' : 'recency';
+  warnings.push(RANKING_SUMMARY[rankingMode]);
+
   const probabilities = rawLeads.map((lead, i) => {
-    // features[i][0] is log1p(ageDays); recent leads rank above stale ones.
     const ageDays = Math.expm1(features[i][0]);
-    let score = 0.5;
-    if (lead.source === 'referral') score += 0.15;
-    else if (lead.source === 'walkin') score += 0.1;
-    if (ageDays <= 7) score += 0.1;
-    else if (ageDays > 90) score -= 0.15;
-    return Math.min(0.95, Math.max(0.05, score));
+    return fallbackProbability({
+      ageDays,
+      source: lead.source,
+      intent: useIntent && intentColumn ? parseIntentValue(lead.extra[intentColumn] ?? '') : null,
+      useIntent,
+    });
   });
+  const reasons = rankingReasons(rawLeads, referenceTime, rankingMode, useIntent ? intentColumn : null);
 
   const labeledProbabilities = labeledRows.map((i) => probabilities[i]);
   const evaluated =
@@ -521,7 +561,7 @@ function scoreWithoutTraining(
       : { accuracy: 0, precision: 0, recall: 0 };
 
   return {
-    scoredLeads: buildScoredLeads(rawLeads, probabilities),
+    scoredLeads: buildScoredLeads(rawLeads, probabilities, reasons),
     metrics: {
       auc: computeAUC(labeledProbabilities, labels),
       accuracy: evaluated.accuracy,
@@ -531,5 +571,7 @@ function scoreWithoutTraining(
       testSize: labels.length,
     },
     warnings,
+    rankingMode,
+    rankingSummary: RANKING_SUMMARY[rankingMode],
   };
 }

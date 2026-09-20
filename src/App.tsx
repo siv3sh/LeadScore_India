@@ -2,8 +2,10 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import DocumentSeo from '@/components/DocumentSeo';
 import { useAuth } from '@/lib/auth';
+import { isOrgAdmin, isSuperAdmin } from '@/lib/org';
 import AdminPage from '@/pages/AdminPage';
 import AuthPage from '@/pages/AuthPage';
+import ChangePasswordPage from '@/pages/ChangePasswordPage';
 import Dashboard from '@/pages/Dashboard';
 import {
   CallListFromExcelGuidePage,
@@ -12,6 +14,7 @@ import {
 } from '@/pages/Guides';
 import LandingPage from '@/pages/LandingPage';
 import { ContactPage, PrivacyPage, RefundsPage, TermsPage } from '@/pages/Legal';
+import OrgDashboard from '@/pages/OrgDashboard';
 import { Loader2, TrendingUp } from 'lucide-react';
 
 function AppContent() {
@@ -43,16 +46,39 @@ function AppContent() {
         <Route path="/guides/call-list-from-excel-india" element={<CallListFromExcelGuidePage />} />
 
         {user ? (
-          <>
-            <Route
-              path="/"
-              element={profile?.is_admin ? <Navigate to="/admin" replace /> : <Dashboard />}
-            />
-            <Route path="/admin" element={<AdminPage />} />
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/signup" element={<Navigate to="/" replace />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </>
+          profile?.must_change_password ? (
+            <>
+              <Route path="/change-password" element={<ChangePasswordPage />} />
+              <Route path="*" element={<Navigate to="/change-password" replace />} />
+            </>
+          ) : (
+            <>
+              <Route
+                path="/"
+                element={
+                  isSuperAdmin(profile) ? (
+                    <Navigate to="/admin" replace />
+                  ) : isOrgAdmin(profile) ? (
+                    <Navigate to="/org" replace />
+                  ) : (
+                    <Dashboard />
+                  )
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  isSuperAdmin(profile) ? <Navigate to="/admin" replace /> : <Dashboard />
+                }
+              />
+              <Route path="/org" element={<OrgDashboard />} />
+              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/change-password" element={<ChangePasswordPage />} />
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              <Route path="/signup" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          )
         ) : (
           <>
             <Route path="/" element={<LandingPage />} />

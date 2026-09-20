@@ -72,25 +72,21 @@ beforeEach(() => {
   fromMock.mockReset();
 });
 
-describe('processCSVUpload rejects before touching the database', () => {
-  // The upload row is what getMonthlyLeadCount and the enforce_monthly_lead_limit
-  // trigger both count against the plan. Creating one for a file that cannot be
-  // scored charges the customer's quota for nothing, which is the bug this guards.
-  it('never writes anything when no lead is marked converted', async () => {
+describe('processCSVUpload scoring gate', () => {
+  it('still writes when no lead is converted, using source-and-recency ranking', async () => {
     const calls = installSupabaseMock();
 
-    await expect(
-      processCSVUpload(
-        'ws_1',
-        'no-wins.csv',
-        csvWithStatuses(['lost', 'lost', 'no_response', 'new']),
-        MAPPING
-      )
-    ).rejects.toThrow('No leads are marked as converted');
+    const result = await processCSVUpload(
+      'ws_1',
+      'no-wins.csv',
+      csvWithStatuses(['lost', 'lost', 'no_response', 'new']),
+      MAPPING
+    );
 
-    expect(fromMock).not.toHaveBeenCalled();
-    expect(calls.uploadsInsert).not.toHaveBeenCalled();
-    expect(calls.leadsInsert).not.toHaveBeenCalled();
+    expect(result.leadCount).toBe(4);
+    expect(result.warnings.join(' ')).toMatch(/converted/i);
+    expect(calls.uploadsInsert).toHaveBeenCalledTimes(1);
+    expect(calls.leadsInsert).toHaveBeenCalledTimes(1);
   });
 
   it('never writes anything for a headers-only file', async () => {

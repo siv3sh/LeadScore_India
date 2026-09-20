@@ -277,39 +277,39 @@ describe('training thresholds', () => {
   // trainSize is 0 on the fallback path and equals the labelled count when a
   // model was actually fitted, which is how these tests tell them apart.
   const trained = (leads: ReturnType<typeof labelledLeads>) => {
-    const { metrics, warnings } = scoreLeads(leads);
-    return { trainSize: metrics.trainSize, warned: warnings.join(' ').includes('too few to train') };
+    const { metrics, rankingMode } = scoreLeads(leads);
+    return { trainSize: metrics.trainSize, rankingMode };
   };
 
   it('falls back one row below the minimum labelled count', () => {
-    expect(trained(labelledLeads({ won: 5, lost: 4 }))).toEqual({ trainSize: 0, warned: true });
+    expect(trained(labelledLeads({ won: 5, lost: 4 }))).toEqual({ trainSize: 0, rankingMode: 'recency' });
   });
 
   it('trains at exactly the minimum labelled count', () => {
-    expect(trained(labelledLeads({ won: 5, lost: 5 }))).toEqual({ trainSize: 10, warned: false });
+    expect(trained(labelledLeads({ won: 5, lost: 5 }))).toEqual({ trainSize: 10, rankingMode: 'trained' });
   });
 
   it('falls back on a single positive even with enough total rows', () => {
-    expect(trained(labelledLeads({ won: 1, lost: 11 }))).toEqual({ trainSize: 0, warned: true });
+    expect(trained(labelledLeads({ won: 1, lost: 11 }))).toEqual({ trainSize: 0, rankingMode: 'recency' });
   });
 
   it('falls back on a single negative even with enough total rows', () => {
-    expect(trained(labelledLeads({ won: 11, lost: 1 }))).toEqual({ trainSize: 0, warned: true });
+    expect(trained(labelledLeads({ won: 11, lost: 1 }))).toEqual({ trainSize: 0, rankingMode: 'recency' });
   });
 
   it('trains at exactly two rows in the smaller class', () => {
-    expect(trained(labelledLeads({ won: 2, lost: 10 }))).toEqual({ trainSize: 12, warned: false });
+    expect(trained(labelledLeads({ won: 2, lost: 10 }))).toEqual({ trainSize: 12, rankingMode: 'trained' });
   });
 
   it('falls back when every settled lead has the same outcome', () => {
-    expect(trained(labelledLeads({ won: 20, lost: 0 }))).toEqual({ trainSize: 0, warned: true });
+    expect(trained(labelledLeads({ won: 20, lost: 0 }))).toEqual({ trainSize: 0, rankingMode: 'recency' });
   });
 
   // Open rows are scored but never counted toward the training thresholds.
   it('does not let open leads make up the minimum', () => {
     expect(trained(labelledLeads({ won: 4, lost: 4, open: 30 }))).toEqual({
       trainSize: 0,
-      warned: true,
+      rankingMode: 'recency',
     });
   });
 

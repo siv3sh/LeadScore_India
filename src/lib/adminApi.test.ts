@@ -15,6 +15,9 @@ function makeProfile(overrides: Partial<Profile> = {}): Profile {
     id: 'u1',
     email: 'owner@brand.com',
     is_admin: false,
+    org_id: null,
+    role: 'org_user',
+    must_change_password: false,
     avatar_url: null,
     created_at: '2026-09-01T00:00:00.000Z',
     ...overrides,
@@ -25,8 +28,14 @@ function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
     id: 'w1',
     user_id: 'u1',
+    org_id: null,
     name: 'Brand',
     created_at: '2026-09-01T00:00:00.000Z',
+    sheet_url: null,
+    sheet_mapping: null,
+    sheet_sync_enabled: false,
+    sheet_last_synced_at: null,
+    sheet_last_error: null,
     ...overrides,
   };
 }
@@ -60,6 +69,9 @@ describe('buildAdminUserRows', () => {
       userId: 'u1',
       email: 'owner@brand.com',
       isAdmin: false,
+      role: 'org_user',
+      orgId: null,
+      mustChangePassword: false,
       workspaceId: 'w1',
       workspaceName: 'Brand',
       signedUpAt: '2026-09-01T00:00:00.000Z',
@@ -177,7 +189,7 @@ describe('filterAdminUsers', () => {
   const emailsOf = (result: AdminUserRow[]) => result.map((r) => r.email).sort();
 
   it('returns everything when nothing is filtered', () => {
-    expect(filterAdminUsers(rows, { search: '', plan: 'all' })).toHaveLength(3);
+    expect(filterAdminUsers(rows, { search: '', plan: 'all' })).toHaveLength(2);
   });
 
   it('matches part of an email regardless of case', () => {
@@ -191,7 +203,7 @@ describe('filterAdminUsers', () => {
 
   it('ignores surrounding whitespace in the search', () => {
     expect(filterAdminUsers(rows, { search: '   riya  ', plan: 'all' })).toHaveLength(1);
-    expect(filterAdminUsers(rows, { search: '   ', plan: 'all' })).toHaveLength(3);
+    expect(filterAdminUsers(rows, { search: '   ', plan: 'all' })).toHaveLength(2);
   });
 
   it('filters by plan', () => {
@@ -224,6 +236,9 @@ describe('buildAdminStats', () => {
       userId: 'u1',
       email: 'a@b.com',
       isAdmin: false,
+      role: 'org_user',
+      orgId: null,
+      mustChangePassword: false,
       workspaceId: 'w1',
       workspaceName: 'Brand',
       signedUpAt: '2026-09-01T00:00:00.000Z',
@@ -248,7 +263,7 @@ describe('buildAdminStats', () => {
       NOW
     );
 
-    expect(stats.totalAccounts).toBe(3);
+    expect(stats.totalAccounts).toBe(2);
     expect(stats.admins).toBe(1);
     expect(stats.paidAccounts).toBe(2);
     expect(stats.manualGrants).toBe(1);

@@ -9,21 +9,54 @@ export interface RawLead {
   order_value: number;
   num_orders: number;
   status: string;
+  /** Leftover CSV columns that were not mapped to a scoring field. */
+  extra: Record<string, string>;
 }
 
-export const REQUIRED_COLUMNS = [
-  'name',
-  'phone',
+/** Name and phone are the only columns a call list cannot work without. */
+export const REQUIRED_COLUMNS = ['name', 'phone'] as const;
+
+export const OPTIONAL_COLUMNS = [
+  'lead_id',
+  'city',
   'source',
   'created_at',
+  'last_contacted_at',
   'order_value',
   'num_orders',
   'status',
 ] as const;
 
-export const OPTIONAL_COLUMNS = ['lead_id', 'city', 'last_contacted_at'] as const;
+export const ALL_COLUMNS = [...REQUIRED_COLUMNS, ...OPTIONAL_COLUMNS] as const;
 
-export const ALL_COLUMNS = [...OPTIONAL_COLUMNS, ...REQUIRED_COLUMNS] as const;
+export const MAX_EXTRA_KEYS = 24;
+export const MAX_EXTRA_VALUE_LEN = 240;
+export const MAX_DISPLAY_EXTRAS = 8;
+
+export type MappingFieldKey =
+  | 'name'
+  | 'phone'
+  | 'source'
+  | 'created_at'
+  | 'status'
+  | 'city'
+  | 'order_value'
+  | 'num_orders'
+  | 'lead_id'
+  | 'last_contacted_at';
+
+export const MAPPING_FIELDS: { key: MappingFieldKey; label: string; required: boolean }[] = [
+  { key: 'name', label: 'Name', required: true },
+  { key: 'phone', label: 'Phone', required: true },
+  { key: 'source', label: 'Source', required: false },
+  { key: 'created_at', label: 'Created at', required: false },
+  { key: 'status', label: 'Converted / not converted', required: false },
+  { key: 'city', label: 'City', required: false },
+  { key: 'order_value', label: 'Order value', required: false },
+  { key: 'num_orders', label: 'Num orders', required: false },
+  { key: 'lead_id', label: 'Lead ID', required: false },
+  { key: 'last_contacted_at', label: 'Last contacted', required: false },
+];
 
 // The only source values the model one-hot encodes. Anything else scores as all-zero.
 export const SOURCES = ['fb', 'ig', 'google', 'referral', 'walkin', 'other'];
@@ -105,34 +138,270 @@ export function parseCSV(text: string): { headers: string[]; rows: string[][] } 
 
 export interface ColumnMapping {
   lead_id?: string;
-  name: string;
-  phone: string;
-  source: string;
+  name?: string;
+  phone?: string;
+  source?: string;
   city?: string;
-  created_at: string;
+  created_at?: string;
   last_contacted_at?: string;
-  order_value: string;
-  num_orders: string;
-  status: string;
+  order_value?: string;
+  num_orders?: string;
+  status?: string;
 }
 
+type AliasRule = {
+  exact: string[];
+  contains: string[];
+  exclude: string[];
+};
+
+function normalizeHeader(header: string): string {
+  return header.toLowerCase().trim().replace(/[\s-]+/g, '_');
+}
+
+function matchesToken(normalized: string, token: string): boolean {
+  return normalized === token || normalized.endsWith(`_${token}`) || normalized.startsWith(`${token}_`);
+}
+
+function scoreHeader(normalized: string, rule: AliasRule): number {
+  if (rule.exclude.some((token) => matchesToken(normalized, token))) return 0;
+  if (rule.exact.includes(normalized)) return 100;
+  for (const token of rule.contains) {
+    if (matchesToken(normalized, token)) return 80;
+  }
+  return 0;
+}
+
+function pickHeader(headers: string[], rule: AliasRule, used: Set<string>): string | undefined {
+  let best: { header: string; score: number } | undefined;
+  for (const header of headers) {
+    if (!header || used.has(header)) continue;
+    const score = scoreHeader(normalizeHeader(header), rule);
+    if (score > 0 && (!best || score > best.score)) {
+      best = { header, score };
+    }
+  }
+  return best?.header;
+}
+
+const NAME_RULE: AliasRule = {
+  exact: ['name', 'full_name', 'customer_name', 'client_name', 'lead_name', 'contact_name', 'your_name'],
+  contains: ['full_name', 'customer', 'client', 'lead_name'],
+  exclude: ['ad_name', 'adset_name', 'campaign_name', 'form_name', 'page_name', 'audience_name', 'conversion_name'],
+};
+
+const PHONE_RULE: AliasRule = {
+  exact: ['phone', 'phone_number', 'mobile', 'mobile_number', 'whatsapp', 'whatsapp_number', 'tel', 'telephone'],
+  contains: ['phone', 'mobile', 'whatsapp'],
+  exclude: ['phone_consent', 'consent'],
+};
+
+const SOURCE_RULE: AliasRule = {
+  exact: ['source', 'channel', 'origin', 'platform', 'utm_source', 'medium'],
+  contains: ['source', 'channel', 'platform'],
+  exclude: ['resource'],
+};
+
+const CREATED_RULE: AliasRule = {
+  exact: ['created_at', 'created_time', 'created', 'date', 'timestamp', 'lead_date', 'submitted_at', 'date_created'],
+  contains: ['created', 'submitted', 'timestamp', 'lead_date'],
+  exclude: ['last_contact', 'conversion_time', 'updated'],
+};
+
+const STATUS_RULE: AliasRule = {
+  exact: ['status', 'stage', 'outcome', 'result', 'converted', 'conversion_status'],
+  contains: ['status', 'outcome', 'converted'],
+  exclude: ['conversion_value', 'conversion_time', 'conversion_name', 'conversion_currency', 'lead_status'],
+};
+
+const CITY_RULE: AliasRule = {
+  exact: ['city', 'location', 'town', 'district'],
+  contains: ['city', 'town', 'district'],
+  exclude: ['location_id'],
+};
+
+const LEAD_ID_RULE: AliasRule = {
+  exact: ['lead_id', 'leadid', 'id'],
+  contains: ['lead_id'],
+  exclude: ['ad_id', 'adset_id', 'campaign_id', 'form_id', 'page_id', 'click_id', 'gclid'],
+};
+
+const LAST_CONTACT_RULE: AliasRule = {
+  exact: ['last_contacted_at', 'last_contact', 'last_touch', 'contacted_at', 'contacted_on', 'contact_date'],
+  contains: ['last_contact', 'last_touch', 'contacted_at'],
+  exclude: ['phone'],
+};
+
+const ORDER_VALUE_RULE: AliasRule = {
+  exact: ['order_value', 'value', 'amount', 'revenue', 'aov'],
+  contains: ['order_value', 'revenue', 'amount'],
+  exclude: ['conversion_value', 'num_orders'],
+};
+
+const NUM_ORDERS_RULE: AliasRule = {
+  exact: ['num_orders', 'orders', 'order_count', 'purchases'],
+  contains: ['num_orders', 'order_count', 'purchases'],
+  exclude: ['order_value'],
+};
+
+/**
+ * Matches messy real-world headers (Instagram ads, Google Sheets, WhatsApp
+ * exports) onto scoring fields. Unmapped columns are kept as extras — the
+ * call list does not require a fixed template.
+ */
 export function guessColumnMapping(headers: string[]): ColumnMapping {
-  const findCol = (candidates: string[]): string | undefined => {
-    return headers.find((h) => candidates.some((c) => h.includes(c)));
+  const used = new Set<string>();
+  const take = (rule: AliasRule): string | undefined => {
+    const header = pickHeader(headers, rule, used);
+    if (header) used.add(header);
+    return header;
   };
 
-  return {
-    lead_id: findCol(['lead_id', 'leadid', 'id']),
-    name: findCol(['name', 'customer', 'client']) ?? headers[0],
-    phone: findCol(['phone', 'mobile', 'number', 'contact']) ?? headers[1],
-    city: findCol(['city', 'location', 'town', 'district']),
-    source: findCol(['source', 'channel', 'origin']) ?? 'source',
-    created_at: findCol(['created', 'date', 'timestamp', 'lead_date']) ?? 'created_at',
-    last_contacted_at: findCol(['last_contact', 'last_touch', 'contacted_at', 'contacted_on', 'contact_date']) ?? undefined,
-    order_value: findCol(['order_value', 'value', 'amount', 'revenue', 'aov']) ?? 'order_value',
-    num_orders: findCol(['num_orders', 'orders', 'order_count', 'purchases']) ?? 'num_orders',
-    status: findCol(['status', 'stage', 'outcome', 'result']) ?? 'status',
+  const mapping: ColumnMapping = {
+    name: take(NAME_RULE),
+    phone: take(PHONE_RULE),
+    source: take(SOURCE_RULE),
+    created_at: take(CREATED_RULE),
+    status: take(STATUS_RULE),
+    city: take(CITY_RULE),
+    lead_id: take(LEAD_ID_RULE),
+    last_contacted_at: take(LAST_CONTACT_RULE),
+    order_value: take(ORDER_VALUE_RULE),
+    num_orders: take(NUM_ORDERS_RULE),
   };
+
+  if (!mapping.name) {
+    const firstName = pickHeader(headers, { exact: ['first_name', 'firstname'], contains: ['first_name'], exclude: [] }, used);
+    if (firstName) {
+      mapping.name = firstName;
+      used.add(firstName);
+    }
+  }
+
+  if (!mapping.name) {
+    const fallback = headers.find((header) => header && !used.has(header));
+    if (fallback) mapping.name = fallback;
+  }
+  if (!mapping.phone) {
+    const fallback = headers.find((header) => header && !used.has(header) && header !== mapping.name);
+    if (fallback) mapping.phone = fallback;
+  }
+
+  return mapping;
+}
+
+export function mappedHeaders(mapping: ColumnMapping): Set<string> {
+  const used = new Set<string>();
+  for (const value of Object.values(mapping)) {
+    if (value) used.add(value);
+  }
+  return used;
+}
+
+export function unmappedHeaders(headers: string[], mapping: ColumnMapping): string[] {
+  const used = mappedHeaders(mapping);
+  return headers.filter((header) => header && !used.has(header));
+}
+
+export function parseLeadExtra(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const extra: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!key.trim()) continue;
+    if (typeof raw !== 'string' && typeof raw !== 'number') continue;
+    const text = String(raw).trim();
+    if (!text) continue;
+    extra[key] = text.slice(0, MAX_EXTRA_VALUE_LEN);
+    if (Object.keys(extra).length >= MAX_EXTRA_KEYS) break;
+  }
+  return extra;
+}
+
+export function collectExtraKeys(leads: Array<{ extra?: unknown }>): string[] {
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const lead of leads) {
+    for (const key of Object.keys(parseLeadExtra(lead.extra))) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      keys.push(key);
+      if (keys.length >= MAX_EXTRA_KEYS) return keys;
+    }
+  }
+  return keys;
+}
+
+export function formatExtraLabel(key: string): string {
+  const cleaned = key.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return key;
+  return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+const SKIP_DISPLAY_EXTRA = /(^id$|_id$|^is_|organic|token|click_id|gclid)/;
+const PREFERRED_EXTRAS = [
+  'email',
+  'campaign',
+  'ad_name',
+  'form',
+  'product',
+  'budget',
+  'city',
+  'interest',
+  'message',
+  'company',
+];
+
+/** First extras worth showing on a call list; skip ids and ad-system flags. */
+export function suggestDisplayExtras(keys: string[]): string[] {
+  const usable = keys.filter((key) => !SKIP_DISPLAY_EXTRA.test(normalizeHeader(key)));
+  const ranked = [...usable].sort((a, b) => {
+    const rankA = PREFERRED_EXTRAS.findIndex((token) => normalizeHeader(a).includes(token));
+    const rankB = PREFERRED_EXTRAS.findIndex((token) => normalizeHeader(b).includes(token));
+    return (rankA === -1 ? 99 : rankA) - (rankB === -1 ? 99 : rankB);
+  });
+  return ranked.slice(0, 3);
+}
+
+function normalizePhone(value: string): string {
+  return value.trim().replace(/^p:/i, '').trim();
+}
+
+function normalizeSource(value: string): string {
+  const trimmed = value.toLowerCase().trim();
+  if (!trimmed) return 'other';
+  if (trimmed === 'facebook' || trimmed === 'facebook ads' || trimmed === 'meta' || trimmed === 'fb ads') {
+    return 'fb';
+  }
+  if (trimmed === 'instagram' || trimmed === 'instagram ads' || trimmed === 'ig ads') return 'ig';
+  if (trimmed === 'google ads' || trimmed === 'google_ads' || trimmed === 'gads') return 'google';
+  if (trimmed === 'walk-in' || trimmed === 'walk_in' || trimmed === 'store') return 'walkin';
+  return trimmed;
+}
+
+function lastNameHeader(headers: string[], mapping: ColumnMapping): string | undefined {
+  const used = mappedHeaders(mapping);
+  return headers.find((header) => {
+    if (!header || used.has(header)) return false;
+    const normalized = normalizeHeader(header);
+    return normalized === 'last_name' || normalized === 'lastname';
+  });
+}
+
+function buildExtra(
+  headers: string[],
+  row: string[],
+  skip: Set<string>
+): Record<string, string> {
+  const extra: Record<string, string> = {};
+  for (let i = 0; i < headers.length; i++) {
+    const header = headers[i];
+    if (!header || skip.has(header)) continue;
+    const value = (i < row.length ? row[i] : '').trim().slice(0, MAX_EXTRA_VALUE_LEN);
+    if (!value) continue;
+    extra[header] = value;
+    if (Object.keys(extra).length >= MAX_EXTRA_KEYS) break;
+  }
+  return extra;
 }
 
 export function mapRowsToLeadsWithHeaders(
@@ -145,9 +414,11 @@ export function mapRowsToLeadsWithHeaders(
     return headers.indexOf(colName);
   };
 
+  const lastNameCol = lastNameHeader(headers, mapping);
   const idx = {
     lead_id: getIndex(mapping.lead_id),
     name: getIndex(mapping.name),
+    lastName: getIndex(lastNameCol),
     phone: getIndex(mapping.phone),
     city: getIndex(mapping.city),
     source: getIndex(mapping.source),
@@ -158,24 +429,32 @@ export function mapRowsToLeadsWithHeaders(
     status: getIndex(mapping.status),
   };
 
+  const skipExtra = mappedHeaders(mapping);
+  if (lastNameCol) skipExtra.add(lastNameCol);
+
   return rows.map((row, i) => {
-    const getVal = (i: number): string => (i >= 0 && i < row.length ? row[i] : '');
+    const getVal = (index: number): string => (index >= 0 && index < row.length ? row[index] : '');
     const parseNum = (s: string, def = 0): number => {
       const n = parseFloat(s.replace(/[^0-9.-]/g, ''));
       return isNaN(n) ? def : n;
     };
 
+    const first = getVal(idx.name).trim();
+    const last = getVal(idx.lastName).trim();
+    const name = [first, last].filter(Boolean).join(' ') || 'Unknown';
+
     return {
       lead_id: getVal(idx.lead_id) || `lead_${i + 1}`,
-      name: getVal(idx.name) || 'Unknown',
-      phone: getVal(idx.phone) || '',
+      name,
+      phone: normalizePhone(getVal(idx.phone)),
       city: getVal(idx.city).trim(),
-      source: getVal(idx.source).toLowerCase().trim() || 'other',
+      source: normalizeSource(getVal(idx.source)),
       created_at: normalizeTimestamp(getVal(idx.created_at)) ?? new Date().toISOString(),
       last_contacted_at: normalizeTimestamp(getVal(idx.last_contacted_at)),
       order_value: parseNum(getVal(idx.order_value)),
-      num_orders: parseInt(getVal(idx.num_orders)) || 0,
+      num_orders: parseInt(getVal(idx.num_orders), 10) || 0,
       status: normalizeStatus(getVal(idx.status)),
+      extra: buildExtra(headers, row, skipExtra),
     };
   });
 }
@@ -229,21 +508,18 @@ export interface LeadValidation {
 }
 
 /**
- * Catches mappings that produce a model with nothing to learn from. The label is
- * derived from converted status (`won` in CSV), so a file with no converted rows
- * trains on an all-zero target and scores every lead identically instead of failing.
+ * Warns on mappings that leave the model with nothing useful to learn from.
+ * A file with no converted rows is still ranked (source + recency) rather than
+ * rejected — Instagram ads exports never carry a converted column.
  */
 export function validateLeadsForScoring(leads: RawLead[]): LeadValidation {
   const warnings: string[] = [];
 
   if (!leads.some((l) => l.status === 'won')) {
-    return {
-      error:
-        'No leads are marked as converted, so there is nothing for the model to learn from. ' +
-        'Map your outcome column using converted / not converted / no response ' +
-        '(CSV: won / lost / no_response), then upload again.',
-      warnings,
-    };
+    warnings.push(
+      'No converted leads in this file, so ranking uses source and how recently they arrived — not your past wins. ' +
+        'Add a converted / not converted column later if you want a model trained on your results.'
+    );
   }
 
   const unrecognizedSources: string[] = [];

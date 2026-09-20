@@ -28,6 +28,7 @@ export function makeLead(overrides: Partial<RawLead> = {}): RawLead {
     order_value: 0,
     num_orders: 0,
     status: 'lost',
+    extra: {},
     ...overrides,
   };
 }

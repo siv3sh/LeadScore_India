@@ -27,6 +27,11 @@ npm run dev
 
 The Supabase URL and anon key are pre-configured in `.env`. The app runs at `http://localhost:5173`.
 
+## Multi-organization (org branch)
+
+See [docs/ORG.md](docs/ORG.md) for schema, `npm run migrate:org`, the email stub,
+and how to roll this back. Do not run the backfill on every server start.
+
 ## Environment Variables
 
 | Variable | Description |
@@ -52,24 +57,13 @@ For Razorpay (configured as edge function secrets, not in `.env`):
 
 ## CSV Format
 
-### Required Columns
-| Column | Type | Description |
-|--------|------|-------------|
-| `name` | string | Lead/customer name |
-| `phone` | string | Phone number |
-| `source` | string | Lead source: fb, ig, google, referral, walkin, other |
-| `created_at` | timestamp | When the lead was created |
-| `order_value` | float | Total order value (can be 0) |
-| `num_orders` | int | Number of orders placed |
-| `status` | string | Outcome: converted / not converted / no response / open (CSV: `won`, `lost`, `no_response`, `unknown`) |
+### Upload
 
-### Optional Columns
-| Column | Type | Description |
-|--------|------|-------------|
-| `lead_id` | string | Unique lead ID (auto-generated if missing) |
-| `last_contacted_at` | timestamp | Last contact date |
+Any CSV or Excel works — Instagram ads, Google Sheets, WhatsApp exports. We auto-match name and phone (required to call), keep every other column, and you pick what shows on the list.
 
-You can download a sample CSV template from the upload modal.
+A converted / not converted column is optional. Without it, ranking uses source and how recently the lead arrived.
+
+You can still download a sample file from the upload modal if you want a starting sheet.
 
 ## Scoring Logic
 

@@ -158,46 +158,74 @@ describe('guessColumnMapping', () => {
     expect(guessColumnMapping(['name', 'phone', 'status']).last_contacted_at).toBeUndefined();
   });
 
-});
+  it('does not invent scoring columns that are missing from the file', () => {
+    const mapping = guessColumnMapping(['full_name', 'phone_number']);
+    expect(mapping.source).toBeUndefined();
+    expect(mapping.created_at).toBeUndefined();
+    expect(mapping.status).toBeUndefined();
+    expect(mapping.order_value).toBeUndefined();
+  });
 
-/**
- * Characterisation tests: these lock in today's WRONG answers so a future fix
- * has a baseline to diff against. They are not statements of desired behaviour.
- *
- * The cause is in guessColumnMapping's matcher, which scans headers in file
- * order and takes the first header containing ANY candidate substring, rather
- * than scanning candidates in priority order. A decoy column therefore wins
- * whenever it happens to sit to the left of the real one.
- *
- * When this is fixed, every expectation below should flip to the value named in
- * its comment, and these tests will fail until they are updated. That failure is
- * the intended signal.
- */
-describe('guessColumnMapping known misfires (current behaviour, not desired)', () => {
-  it('picks a "lead origin" decoy over the real "lead source"', () => {
-    // Should be 'lead source'.
+  it('maps an Instagram ads export without treating campaign names as the lead', () => {
+    const mapping = guessColumnMapping([
+      'id',
+      'created_time',
+      'ad_id',
+      'ad_name',
+      'campaign_name',
+      'form_name',
+      'platform',
+      'full_name',
+      'phone_number',
+      'email',
+    ]);
+    expect(mapping.name).toBe('full_name');
+    expect(mapping.phone).toBe('phone_number');
+    expect(mapping.source).toBe('platform');
+    expect(mapping.created_at).toBe('created_time');
+    expect(mapping.lead_id).toBe('id');
+    expect(mapping.status).toBeUndefined();
+  });
+
+  it('does not treat Meta lead_status as a converted column', () => {
+    expect(guessColumnMapping(['first_name', 'phone_number', 'lead_status']).status).toBeUndefined();
+  });
+
+  it('strips the Meta p: prefix from phone numbers', () => {
+    const headers = ['name', 'phone'];
+    const lead = mapRowsToLeadsWithHeaders(headers, [['Riya', 'p:+918138900990']], guessColumnMapping(headers))[0];
+    expect(lead.phone).toBe('+918138900990');
+  });
+
+  it('joins first and last name columns', () => {
+    const headers = ['first_name', 'last_name', 'mobile'];
+    const mapping = guessColumnMapping(headers);
+    expect(mapping.name).toBe('first_name');
+    const lead = mapRowsToLeadsWithHeaders(headers, [['Aarav', 'Sharma', '9000000000']], mapping)[0];
+    expect(lead.name).toBe('Aarav Sharma');
+    expect(lead.extra).toEqual({});
+  });
+
+  it('prefers lead source over a lead origin decoy', () => {
     expect(guessColumnMapping(['name', 'phone', 'lead origin', 'lead source']).source).toBe(
-      'lead origin'
+      'lead source'
     );
   });
 
-  it('matches "date" inside an unrelated "updates" column', () => {
-    // Should be 'created_at'.
+  it('does not treat an updates column as the created date', () => {
     expect(guessColumnMapping(['name', 'phone', 'updates', 'created_at']).created_at).toBe(
-      'updates'
+      'created_at'
     );
   });
 
-  it('matches the bare "id" candidate inside an unrelated column', () => {
-    // Should be undefined, or 'lead_id' when one is present.
-    expect(guessColumnMapping(['valid_email', 'name', 'phone']).lead_id).toBe('valid_email');
+  it('does not treat email as a lead id', () => {
+    expect(guessColumnMapping(['valid_email', 'name', 'phone']).lead_id).toBeUndefined();
   });
 
-  it('lets an "amount" column win over an explicit "order_value"', () => {
-    // Should be 'order_value'.
+  it('prefers an explicit order_value over discount_amount', () => {
     expect(
       guessColumnMapping(['name', 'phone', 'discount_amount', 'order_value']).order_value
-    ).toBe('discount_amount');
+    ).toBe('order_value');
   });
 });
 
@@ -232,6 +260,7 @@ describe('mapRowsToLeadsWithHeaders', () => {
       order_value: 1299.5,
       num_orders: 2,
       status: 'won',
+      extra: {},
     });
   });
 
@@ -289,6 +318,30 @@ describe('mapRowsToLeadsWithHeaders', () => {
     );
     expect(leads.map((l) => l.lead_id)).toEqual(['lead_1', 'lead_2', 'lead_3']);
   });
+
+  it('keeps leftover Instagram columns as extras', () => {
+    const headers = ['full_name', 'phone_number', 'email', 'campaign_name', 'ad_id'];
+    const mapping = guessColumnMapping(headers);
+    const lead = mapRowsToLeadsWithHeaders(
+      headers,
+      [['Riya Das', '9000000000', 'riya@shop.com', 'Summer Sale', '120']],
+      mapping
+    )[0];
+    expect(lead.extra).toEqual({
+      email: 'riya@shop.com',
+      campaign_name: 'Summer Sale',
+      ad_id: '120',
+    });
+  });
+
+  it('normalises Instagram / Facebook platform labels onto scoring sources', () => {
+    const headers = ['name', 'phone', 'platform'];
+    const mapping = guessColumnMapping(headers);
+    const ig = mapRowsToLeadsWithHeaders(headers, [['Riya', '1', 'Instagram']], mapping)[0];
+    const fb = mapRowsToLeadsWithHeaders(headers, [['Aarav', '2', 'facebook']], mapping)[0];
+    expect(ig.source).toBe('ig');
+    expect(fb.source).toBe('fb');
+  });
 });
 
 describe('summarizeStatuses', () => {
@@ -334,11 +387,10 @@ describe('validateLeadsForScoring', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  // The label is derived from converted status (`won` in CSV), so without one
-  // the model trains on an all-zero target and scores every lead identically.
-  it('rejects a file with no converted leads', () => {
+  it('warns, but still allows scoring, when no lead is converted', () => {
     const result = validateLeadsForScoring([makeLead({ status: 'lost' }), makeLead({ status: 'new' })]);
-    expect(result.error).toContain('No leads are marked as converted');
+    expect(result.error).toBeNull();
+    expect(result.warnings.join(' ')).toContain('No converted leads');
   });
 
   it('warns when there are no negative examples to contrast against', () => {
@@ -467,16 +519,9 @@ describe('column constants', () => {
 });
 
 describe('ColumnMapping shape', () => {
-  it('requires the columns the scorer cannot work without', () => {
-    const mapping: ColumnMapping = {
-      name: 'name',
-      phone: 'phone',
-      source: 'source',
-      created_at: 'created_at',
-      order_value: 'order_value',
-      num_orders: 'num_orders',
-      status: 'status',
-    };
-    expect(Object.keys(mapping)).toHaveLength(7);
+  it('only requires name and phone — every other field can stay unmapped', () => {
+    const mapping: ColumnMapping = { name: 'full_name', phone: 'phone_number' };
+    expect(mapping.source).toBeUndefined();
+    expect(mapping.status).toBeUndefined();
   });
 });

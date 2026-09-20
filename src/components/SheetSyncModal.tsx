@@ -14,7 +14,7 @@ import {
 import {
   guessColumnMapping,
   parseCSV,
-  REQUIRED_COLUMNS,
+  MAPPING_FIELDS,
   type ColumnMapping,
 } from '@/lib/csvParser';
 import { SHEET_SYNC_FILE_PREFIX, toGoogleSheetCsvExportUrl } from '@/lib/googleSheet';
@@ -70,6 +70,10 @@ export default function SheetSyncModal({
 
   async function saveAndSync() {
     if (!mapping) return;
+    if (!mapping.name || !mapping.phone) {
+      setError('Map Name and Phone so the call list has someone to contact.');
+      return;
+    }
     setError(null);
     setBusy(true);
     setStep('working');
@@ -248,32 +252,41 @@ export default function SheetSyncModal({
           {step === 'mapping' && mapping && (
             <>
               <p className="text-sm text-slate-600">
-                Found {rows.length.toLocaleString('en-IN')} rows. Confirm columns, then save &amp;
-                sync.
+                Found {rows.length.toLocaleString('en-IN')} rows. We matched columns automatically
+                — only name and phone are required.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {REQUIRED_COLUMNS.map((field) => (
-                  <label key={field} className="block text-xs">
-                    <span className="font-medium text-slate-600 capitalize">
-                      {field.replace(/_/g, ' ')}
+                {MAPPING_FIELDS.map((field) => (
+                  <label key={field.key} className="block text-xs">
+                    <span className="font-medium text-slate-600">
+                      {field.label}
+                      {field.required ? <span className="text-red-500"> *</span> : null}
                     </span>
                     <MenuDropdown
-                      ariaLabel={field.replace(/_/g, ' ')}
+                      ariaLabel={field.label}
                       align="left"
                       className="mt-1 w-full"
                       triggerClassName="input-field w-full py-1.5 justify-between"
                       trigger={
                         <>
-                          <span className="truncate">{mapping[field] || '— Not mapped —'}</span>
+                          <span className="truncate">{mapping[field.key] || '— Not mapped —'}</span>
                           <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
                         </>
                       }
-                      items={headers.map((header) => ({
-                        id: `${field}-${header}`,
-                        label: header,
-                        active: mapping[field] === header,
-                        onSelect: () => setMapping({ ...mapping, [field]: header }),
-                      }))}
+                      items={[
+                        {
+                          id: `${field.key}-none`,
+                          label: '— Not mapped —',
+                          active: !mapping[field.key],
+                          onSelect: () => setMapping({ ...mapping, [field.key]: undefined }),
+                        },
+                        ...headers.map((header) => ({
+                          id: `${field.key}-${header}`,
+                          label: header,
+                          active: mapping[field.key] === header,
+                          onSelect: () => setMapping({ ...mapping, [field.key]: header }),
+                        })),
+                      ]}
                     />
                   </label>
                 ))}

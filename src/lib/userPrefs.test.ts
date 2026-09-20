@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_LIST_DISPLAY,
   DEFAULT_LIST_FILTERS,
   filtersAreDefault,
   loadCustomStatuses,
+  loadListDisplay,
   loadListFilters,
   parseCustomStatusLabel,
   rememberCustomStatus,
+  saveListDisplay,
   saveListFilters,
+  visibleExtraKeys,
 } from './userPrefs';
 
 function memoryStore(initial: Record<string, string> = {}) {
@@ -28,8 +32,8 @@ describe('list filters', () => {
 
   it('round-trips filters per user', () => {
     const store = memoryStore();
-    saveListFilters('user-a', { priority: 'high', source: 'referral', status: 'new' }, store);
-    saveListFilters('user-b', { priority: 'low', source: 'all', status: 'won' }, store);
+    saveListFilters('user-a', { priority: 'high', source: 'referral', status: 'new', scoreFirst: true, date: 'all' }, store);
+    saveListFilters('user-b', { priority: 'low', source: 'all', status: 'won', scoreFirst: true, date: 'all' }, store);
     expect(loadListFilters('user-a', store)).toEqual({
       priority: 'high',
       source: 'referral',
@@ -118,5 +122,40 @@ describe('custom statuses', () => {
     rememberCustomStatus('user-a', { slug: 'busy', label: 'Busy' }, store);
     const again = rememberCustomStatus('user-a', { slug: 'busy', label: 'Busy' }, store);
     expect(again).toEqual([{ slug: 'busy', label: 'Busy' }]);
+  });
+});
+
+describe('list display columns', () => {
+  it('returns defaults when nothing is stored', () => {
+    expect(loadListDisplay('user-a', memoryStore())).toEqual(DEFAULT_LIST_DISPLAY);
+  });
+
+  it('round-trips extra columns per user', () => {
+    const store = memoryStore();
+    saveListDisplay(
+      'user-a',
+      { extraKeys: ['email', 'campaign_name'], showSource: false, showValue: true, extrasConfigured: true },
+      store,
+    );
+    expect(loadListDisplay('user-a', store)).toEqual({
+      extraKeys: ['email', 'campaign_name'],
+      showSource: false,
+      showValue: true,
+      extrasConfigured: true,
+    });
+    expect(loadListDisplay('user-b', store)).toEqual(DEFAULT_LIST_DISPLAY);
+  });
+
+  it('suggests extras until the user has configured the list', () => {
+    const available = ['ad_id', 'email', 'campaign_name', 'is_organic'];
+    expect(visibleExtraKeys(available, DEFAULT_LIST_DISPLAY)).toEqual(['email', 'campaign_name']);
+    expect(
+      visibleExtraKeys(available, {
+        extraKeys: [],
+        showSource: true,
+        showValue: true,
+        extrasConfigured: true,
+      }),
+    ).toEqual([]);
   });
 });

@@ -9,6 +9,7 @@ import {
   type Profile,
   type SubStatus,
   type Subscription,
+  type UserRole,
   type Workspace,
 } from '@/types';
 
@@ -17,6 +18,9 @@ export interface AdminUserRow {
   userId: string;
   email: string;
   isAdmin: boolean;
+  role: UserRole;
+  orgId: string | null;
+  mustChangePassword: boolean;
   workspaceId: string | null;
   workspaceName: string;
   /** Workspace creation time, which is when the account actually signed up. */
@@ -69,6 +73,9 @@ export function buildAdminUserRows(
       userId: profile.id,
       email: profile.email,
       isAdmin: profile.is_admin,
+      role: profile.role,
+      orgId: profile.org_id,
+      mustChangePassword: profile.must_change_password,
       workspaceId: workspace?.id ?? null,
       workspaceName: workspace?.name ?? '—',
       signedUpAt: workspace?.created_at ?? null,

@@ -1,6 +1,7 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { completePasswordChange } from '@/lib/org';
 import type { Workspace, Subscription, Profile } from '@/types';
 
 interface AuthContextValue {
@@ -14,6 +15,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshWorkspace: () => Promise<void>;
+  changePassword: (newPassword: string) => Promise<{ error: string | null }>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -123,9 +125,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function changePassword(newPassword: string) {
+    if (newPassword.length < 8) {
+      return { error: 'Use at least 8 characters.' };
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error: error.message };
+    try {
+      await completePasswordChange();
+    } catch (err) {
+      return {
+        error:
+          err instanceof Error
+            ? err.message
+            : 'Password updated, but the account flag could not be cleared. Sign in again.',
+      };
+    }
+    if (user) await loadWorkspaceData(user.id);
+    return { error: null };
+  }
+
   return (
     <AuthContext.Provider
-      value={{ session, user, workspace, subscription, profile, loading, signUp, signIn, signOut, refreshWorkspace }}
+      value={{
+        session,
+        user,
+        workspace,
+        subscription,
+        profile,
+        loading,
+        signUp,
+        signIn,
+        signOut,
+        refreshWorkspace,
+        changePassword,
+      }}
     >
       {children}
     </AuthContext.Provider>
