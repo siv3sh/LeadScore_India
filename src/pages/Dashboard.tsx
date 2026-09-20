@@ -26,6 +26,7 @@ import {
   Languages,
   RotateCcw,
   Columns3,
+  Info,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import {
@@ -1097,12 +1098,10 @@ export default function Dashboard() {
                                     style={{ width: `${lead.score_0_100 ?? 0}%` }}
                                   />
                                 </div>
+                                {lead.score_reason ? (
+                                  <ScoreReasonHint reason={lead.score_reason} />
+                                ) : null}
                               </div>
-                              {lead.score_reason ? (
-                                <p className="mt-1 text-[11px] text-slate-500 leading-snug max-w-[14rem]">
-                                  {lead.score_reason}
-                                </p>
-                              ) : null}
                             </td>
                             <td className="px-3 py-3">
                               <span
@@ -1992,8 +1991,9 @@ function LeadMobileCard({
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-sm font-semibold tabular-nums text-slate-900">
+              <p className="text-sm font-semibold tabular-nums text-slate-900 inline-flex items-center justify-end gap-1">
                 {lead.score_0_100 ?? 0}
+                {lead.score_reason ? <ScoreReasonHint reason={lead.score_reason} /> : null}
               </p>
               <span
                 className={`mt-1 inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${PRIORITY_STYLES[priority].className}`}
@@ -2001,11 +2001,6 @@ function LeadMobileCard({
                 <span className={`w-1.5 h-1.5 rounded-full ${PRIORITY_STYLES[priority].dot}`} />
                 {PRIORITY_STYLES[priority].label}
               </span>
-              {lead.score_reason ? (
-                <p className="mt-1 text-[10px] text-slate-500 leading-snug max-w-[9.5rem]">
-                  {lead.score_reason}
-                </p>
-              ) : null}
             </div>
           </div>
           <p className="mt-1.5 text-[11px] text-slate-500 truncate">
@@ -2112,6 +2107,27 @@ function ToolbarFilter({
         onSelect: () => onChange(option.value),
       }))}
     />
+  );
+}
+
+/** Score explanation — icon only; full text on hover. */
+function ScoreReasonHint({ reason }: { reason: string }) {
+  return (
+    <span className="relative inline-flex items-center group/reason shrink-0">
+      <span
+        tabIndex={0}
+        aria-label={reason}
+        className="inline-flex text-slate-400 hover:text-slate-600 focus:text-slate-600 outline-none cursor-help"
+      >
+        <Info className="w-3.5 h-3.5" aria-hidden />
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-1.5 w-max max-w-[16rem] -translate-x-1/2 rounded-md bg-slate-800 px-2 py-1.5 text-left text-[11px] leading-snug text-white opacity-0 shadow-md transition-opacity group-hover/reason:opacity-100 group-focus-within/reason:opacity-100"
+      >
+        {reason}
+      </span>
+    </span>
   );
 }
 
