@@ -53,7 +53,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|robots\\.txt|sitemap\\.xml|og\\.jpg|og\\.svg|favicon\\.svg|screenshots/).*)",
+      "source": "/((?!assets/|robots\\.txt|sitemap\\.xml|og\\.jpg|og\\.svg|share-card\\.jpg|favicon\\.svg|screenshots/).*)",
       "destination": "/index.html"
     }
   ]
