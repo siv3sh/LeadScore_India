@@ -93,9 +93,11 @@ export function applyRouteSeo(pathname: string): void {
   upsertMeta('name', 'robots', seo.robots ?? 'index,follow');
   upsertMeta('property', 'og:title', seo.title);
   upsertMeta('property', 'og:description', seo.description);
-  upsertMeta('property', 'og:url', `${SITE_URL}${path === '/' ? '' : path}`);
-  upsertMeta('property', 'og:image', `${SITE_URL}/share-card.jpg`);
+  const origin = window.location.origin;
+  upsertMeta('property', 'og:url', `${origin}${path === '/' ? '' : path}`);
+  upsertMeta('property', 'og:image', `${origin}/share-card.jpg`);
   upsertMeta('name', 'twitter:title', seo.title);
   upsertMeta('name', 'twitter:description', seo.description);
+  upsertMeta('name', 'twitter:image', `${origin}/share-card.jpg`);
   upsertLink('canonical', `${SITE_URL}${path === '/' ? '' : path}`);
 }

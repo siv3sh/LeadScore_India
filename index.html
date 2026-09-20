@@ -22,23 +22,24 @@
     <link rel="alternate" hreflang="en-IN" href="https://leadscore.nuential.com/" />
     <link rel="alternate" hreflang="x-default" href="https://leadscore.nuential.com/" />
 
-    <!-- Open Graph -->
+    <!-- Open Graph. Image is served from the host WhatsApp can already resolve
+         (dev); og:url is omitted so a share of leadscoredev is not rewritten to
+         production, which still fails on some DNS caches and drops the picture. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="LeadScore" />
     <meta property="og:locale" content="en_IN" />
-    <meta property="og:url" content="https://leadscore.nuential.com/" />
     <meta property="og:title" content="LeadScore India — Rank Google Sheet leads for WhatsApp &amp; calls" />
     <meta
       property="og:description"
       content="Not a CRM. Upload a CSV or Google Sheet, get a ranked call and WhatsApp list for Indian small businesses."
     />
-    <meta property="og:image" content="https://leadscore.nuential.com/share-card.jpg" />
-    <meta property="og:image:secure_url" content="https://leadscore.nuential.com/share-card.jpg" />
+    <meta property="og:image" content="https://leadscoredev.nuential.com/share-card.jpg" />
+    <meta property="og:image:secure_url" content="https://leadscoredev.nuential.com/share-card.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="720" />
     <meta property="og:image:alt" content="LeadScore — Stop guessing who to call first" />
-    <link rel="image_src" href="https://leadscore.nuential.com/share-card.jpg" />
+    <link rel="image_src" href="https://leadscoredev.nuential.com/share-card.jpg" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -47,7 +48,7 @@
       name="twitter:description"
       content="Not a CRM. Ranked call and WhatsApp list from your Google Sheet or CSV — built for Indian SMBs."
     />
-    <meta name="twitter:image" content="https://leadscore.nuential.com/share-card.jpg" />
+    <meta name="twitter:image" content="https://leadscoredev.nuential.com/share-card.jpg" />
 
     <script type="application/ld+json">
       {
