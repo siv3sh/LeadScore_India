@@ -496,6 +496,8 @@ export default function Dashboard() {
   const allVisibleSelected = filteredLeads.length > 0 && selectedVisible === filteredLeads.length;
 
   const highPriority = leads.filter((l) => l.priority === 'high').length;
+  const mediumPriority = leads.filter((l) => l.priority === 'medium').length;
+  const lowPriority = leads.filter((l) => l.priority === 'low').length;
   const avgScore =
     leads.length > 0
       ? Math.round(leads.reduce((s, l) => s + (l.score_0_100 ?? 0), 0) / leads.length)
@@ -915,20 +917,20 @@ export default function Dashboard() {
                   value={priorityFilter}
                   onChange={(value) => setPriorityFilter(value as 'all' | Priority)}
                   options={[
-                    { value: 'all', label: 'All priorities' },
+                    { value: 'all', label: `All priorities (${leads.length})` },
                     {
                       value: 'high',
-                      label: 'High',
+                      label: `High (${highPriority})`,
                       icon: <span className={`w-2 h-2 rounded-full ${PRIORITY_STYLES.high.dot}`} />,
                     },
                     {
                       value: 'medium',
-                      label: 'Medium',
+                      label: `Medium (${mediumPriority})`,
                       icon: <span className={`w-2 h-2 rounded-full ${PRIORITY_STYLES.medium.dot}`} />,
                     },
                     {
                       value: 'low',
-                      label: 'Low',
+                      label: `Low (${lowPriority})`,
                       icon: <span className={`w-2 h-2 rounded-full ${PRIORITY_STYLES.low.dot}`} />,
                     },
                   ]}
@@ -2093,7 +2095,7 @@ function ToolbarFilter({
     <MenuDropdown
       ariaLabel={ariaLabel}
       align="left"
-      triggerClassName="select-toolbar w-auto justify-between min-w-[9.5rem] shrink-0"
+      triggerClassName="select-toolbar w-auto justify-between min-w-[11rem] shrink-0"
       trigger={
         <>
           {current?.icon}
