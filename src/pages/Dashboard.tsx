@@ -1024,10 +1024,10 @@ export default function Dashboard() {
                   ))}
                 </ul>
                 <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm border-separate border-spacing-0">
                     <thead>
                       <tr className="border-b border-slate-100 text-left text-xs text-slate-400">
-                        <th className="pl-4 pr-2 py-3 w-10">
+                        <th className="pl-4 pr-2 py-3 w-10 sticky left-0 z-20 bg-white border-b border-slate-100">
                           <input
                             type="checkbox"
                             checked={allVisibleSelected}
@@ -1040,30 +1040,41 @@ export default function Dashboard() {
                             aria-label="Select all visible leads"
                           />
                         </th>
-                        <th className="px-2 py-3 font-medium min-w-[190px]">Lead</th>
-                        <th className="px-3 py-3 font-medium">Score</th>
-                        <th className="px-3 py-3 font-medium">Priority</th>
+                        <th className="px-2 py-3 font-medium w-[190px] min-w-[190px] max-w-[190px] sticky left-10 z-20 bg-white border-b border-slate-100">
+                          Lead
+                        </th>
+                        <th className="px-3 py-3 font-medium w-[7.5rem] min-w-[7.5rem] sticky left-[14.375rem] z-20 bg-white border-b border-slate-100 shadow-[2px_0_6px_-2px_rgba(15,23,42,0.12)]">
+                          Score
+                        </th>
+                        <th className="px-3 py-3 font-medium border-b border-slate-100">Priority</th>
                         {listDisplay.showSource && (
-                          <th className="px-3 py-3 font-medium">Source</th>
+                          <th className="px-3 py-3 font-medium border-b border-slate-100">Source</th>
                         )}
                         {shownExtras.map((key) => (
-                          <th key={key} className="px-3 py-3 font-medium whitespace-nowrap">
+                          <th
+                            key={key}
+                            className="px-3 py-3 font-medium whitespace-nowrap border-b border-slate-100"
+                          >
                             {formatExtraLabel(key)}
                           </th>
                         ))}
                         {listDisplay.showValue && (
-                          <th className="px-3 py-3 font-medium text-right">Value</th>
+                          <th className="px-3 py-3 font-medium text-right border-b border-slate-100">
+                            Value
+                          </th>
                         )}
-                        <th className="px-3 py-3 font-medium">Status</th>
-                        <th className="px-3 py-3 font-medium text-right pr-4">Outreach</th>
+                        <th className="px-3 py-3 font-medium border-b border-slate-100">Status</th>
+                        <th className="px-3 py-3 font-medium text-right pr-4 border-b border-slate-100">
+                          Outreach
+                        </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody>
                       {filteredLeads.map((lead) => {
                         const priority = lead.priority ?? 'low';
                         return (
-                          <tr key={lead.id} className="hover:bg-slate-50/60 transition">
-                            <td className="pl-4 pr-2 py-3">
+                          <tr key={lead.id} className="group hover:bg-slate-50/80 transition">
+                            <td className="pl-4 pr-2 py-3 sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-b border-slate-50">
                               <input
                                 type="checkbox"
                                 checked={selectedIds.has(lead.id)}
@@ -1072,8 +1083,8 @@ export default function Dashboard() {
                                 aria-label={`Select ${lead.name ?? 'lead'}`}
                               />
                             </td>
-                            <td className="px-2 py-3">
-                              <p className="font-semibold text-slate-800 text-[13px] truncate max-w-[220px] flex items-center gap-1.5">
+                            <td className="px-2 py-3 w-[190px] min-w-[190px] max-w-[190px] sticky left-10 z-10 bg-white group-hover:bg-slate-50 border-b border-slate-50">
+                              <p className="font-semibold text-slate-800 text-[13px] truncate flex items-center gap-1.5">
                                 <span className="truncate">{lead.name || '—'}</span>
                                 {isSnoozed(lead.snoozed_until) && (
                                   <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
@@ -1082,12 +1093,12 @@ export default function Dashboard() {
                                   </span>
                                 )}
                               </p>
-                              <p className="text-[11px] text-slate-400 truncate max-w-[220px]">
+                              <p className="text-[11px] text-slate-400 truncate">
                                 {lead.phone || 'No phone'}
                                 {lead.city ? ` · ${lead.city}` : ''}
                               </p>
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-3 w-[7.5rem] min-w-[7.5rem] sticky left-[14.375rem] z-10 bg-white group-hover:bg-slate-50 border-b border-slate-50 shadow-[2px_0_6px_-2px_rgba(15,23,42,0.12)]">
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-slate-800 text-[13px] w-6">
                                   {lead.score_0_100 ?? 0}
@@ -1103,7 +1114,7 @@ export default function Dashboard() {
                                 ) : null}
                               </div>
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-3 border-b border-slate-50">
                               <span
                                 className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-medium border ${PRIORITY_STYLES[priority].className}`}
                               >
@@ -1112,24 +1123,24 @@ export default function Dashboard() {
                               </span>
                             </td>
                             {listDisplay.showSource && (
-                              <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap">
+                              <td className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap border-b border-slate-50">
                                 {formatSource(lead.source)}
                               </td>
                             )}
                             {shownExtras.map((key) => (
                               <td
                                 key={key}
-                                className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap max-w-[160px] truncate"
+                                className="px-3 py-3 text-slate-600 text-[13px] whitespace-nowrap max-w-[160px] truncate border-b border-slate-50"
                               >
                                 {parseLeadExtra(lead.extra)[key] || '—'}
                               </td>
                             ))}
                             {listDisplay.showValue && (
-                              <td className="px-3 py-3 text-right text-slate-700 text-[13px] whitespace-nowrap">
+                              <td className="px-3 py-3 text-right text-slate-600 text-[13px] whitespace-nowrap border-b border-slate-50">
                                 {lead.order_value > 0 ? formatINR(lead.order_value) : '—'}
                               </td>
                             )}
-                            <td className="px-3 py-3">
+                            <td className="px-3 py-3 border-b border-slate-50">
                               <LeadStatusMenu
                                 lead={lead}
                                 customStatuses={customStatuses}
@@ -1138,7 +1149,7 @@ export default function Dashboard() {
                                 onAddCustom={addCustomGridStatus}
                               />
                             </td>
-                            <td className="px-3 py-3 pr-4">
+                            <td className="px-3 py-3 text-right pr-4 border-b border-slate-50">
                               <LeadOutreachActions
                                 lead={lead}
                                 waTemplate={waTemplate}
