@@ -1099,7 +1099,7 @@ export default function Dashboard() {
                                   />
                                 </div>
                                 {lead.score_reason ? (
-                                  <ScoreReasonHint reason={lead.score_reason} />
+                                  <ScoreReasonInfo reason={lead.score_reason} />
                                 ) : null}
                               </div>
                             </td>
@@ -1993,7 +1993,7 @@ function LeadMobileCard({
             <div className="shrink-0 text-right">
               <p className="text-sm font-semibold tabular-nums text-slate-900 inline-flex items-center justify-end gap-1">
                 {lead.score_0_100 ?? 0}
-                {lead.score_reason ? <ScoreReasonHint reason={lead.score_reason} /> : null}
+                {lead.score_reason ? <ScoreReasonInfo reason={lead.score_reason} /> : null}
               </p>
               <span
                 className={`mt-1 inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${PRIORITY_STYLES[priority].className}`}
@@ -2067,6 +2067,26 @@ function ScoreFirstToggle({
   );
 }
 
+function ScoreReasonInfo({ reason }: { reason: string }) {
+  return (
+    <span className="relative inline-flex group/reason shrink-0">
+      <button
+        type="button"
+        className="p-0.5 rounded text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+        aria-label={`Why this score: ${reason}`}
+      >
+        <Info className="w-3.5 h-3.5" aria-hidden="true" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-1.5 w-max max-w-[16rem] -translate-x-1/2 rounded-md bg-slate-800 px-2 py-1.5 text-left text-[11px] font-normal leading-snug text-white opacity-0 shadow-lg transition-opacity group-hover/reason:opacity-100 group-focus-within/reason:opacity-100"
+      >
+        {reason}
+      </span>
+    </span>
+  );
+}
+
 function ToolbarFilter({
   ariaLabel,
   value,
@@ -2107,27 +2127,6 @@ function ToolbarFilter({
         onSelect: () => onChange(option.value),
       }))}
     />
-  );
-}
-
-/** Score explanation — icon only; full text on hover. */
-function ScoreReasonHint({ reason }: { reason: string }) {
-  return (
-    <span className="relative inline-flex items-center group/reason shrink-0">
-      <span
-        tabIndex={0}
-        aria-label={reason}
-        className="inline-flex text-slate-400 hover:text-slate-600 focus:text-slate-600 outline-none cursor-help"
-      >
-        <Info className="w-3.5 h-3.5" aria-hidden />
-      </span>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute left-1/2 bottom-full z-30 mb-1.5 w-max max-w-[16rem] -translate-x-1/2 rounded-md bg-slate-800 px-2 py-1.5 text-left text-[11px] leading-snug text-white opacity-0 shadow-md transition-opacity group-hover/reason:opacity-100 group-focus-within/reason:opacity-100"
-      >
-        {reason}
-      </span>
-    </span>
   );
 }
 
